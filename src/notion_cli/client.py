@@ -117,20 +117,32 @@ class NotionClientWrapper:
             raise Exception(f"Failed to delete page {page_id}: {e}")
 
     def get_database_entries(
-        self, database_id: str, limit: int = 100
+        self,
+        database_id: str,
+        limit: int | None = None,
+        filter_conditions: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
         """Get entries from a database with pagination support."""
         try:
             all_entries = []
             start_cursor = None
 
-            while len(all_entries) < limit:
-                page_size = min(100, limit - len(all_entries))  # Notion API max is 100
+            while True:
+                # If limit is None, get all entries (max 100 per page)
+                # If limit is set, calculate remaining entries needed
+                if limit is None:
+                    page_size = 100  # Notion API max per page
+                else:
+                    remaining = limit - len(all_entries)
+                    if remaining <= 0:
+                        break
+                    page_size = min(100, remaining)
 
                 response = self.query_database(
                     database_id=database_id,
+                    filter_conditions=filter_conditions,
                     start_cursor=start_cursor,
-                    page_size=page_size
+                    page_size=page_size,
                 )
 
                 entries = response.get("results", [])
@@ -144,7 +156,11 @@ class NotionClientWrapper:
                 if not start_cursor:
                     break
 
-            return all_entries[:limit]
+            # Apply limit if specified
+            if limit is not None:
+                return all_entries[:limit]
+            else:
+                return all_entries
         except Exception as e:
             raise Exception(f"Failed to get entries from database {database_id}: {e}")
 
@@ -173,16 +189,197 @@ class NotionClientWrapper:
         elif prop_type == "checkbox":
             return "✓" if property_data.get("checkbox", False) else "✗"
         elif prop_type == "url" and property_data.get("url"):
-            return property_data["url"]
+            url = property_data["url"]
+            # Extract domain name for display
+            try:
+                from urllib.parse import urlparse
+
+                parsed = urlparse(url)
+                domain = parsed.netloc or url
+                return f"[link={url}]{domain}[/link]"
+            except Exception:
+                return url
         elif prop_type == "email" and property_data.get("email"):
-            return property_data["email"]
+            email = property_data["email"]
+            return f"[link=mailto:{email}]{email}[/link]"
         elif prop_type == "phone_number" and property_data.get("phone_number"):
             return property_data["phone_number"]
         elif prop_type == "people" and property_data.get("people"):
             return ", ".join([p.get("name", "") for p in property_data["people"]])
         elif prop_type == "files" and property_data.get("files"):
-            return f"{len(property_data['files'])} file(s)"
+            files = property_data["files"]
+            if not files:
+                return "—"
+            elif len(files) == 1:
+                # Show single file with name and link
+                file_obj = files[0]
+                if file_obj.get("type") == "external":
+                    # External file - show name and URL
+                    name = file_obj.get("name", "File")
+                    url = file_obj.get("external", {}).get("url", "")
+                    if url:
+                        return f"[link={url}]{name}[/link]"
+                    else:
+                        return name
+                elif file_obj.get("type") == "file":
+                    # Notion-hosted file - show name and URL
+                    name = file_obj.get("name", "File")
+                    url = file_obj.get("file", {}).get("url", "")
+                    if url:
+                        return f"[link={url}]{name}[/link]"
+                    else:
+                        return name
+                else:
+                    return file_obj.get("name", "File")
+            else:
+                # Multiple files - show count and first file name
+                first_file = files[0]
+                first_name = first_file.get("name", "File")
+                return f"{first_name} (+{len(files) - 1} more)"
         elif prop_type == "status" and property_data.get("status"):
             return property_data["status"].get("name", "")
         else:
             return str(property_data.get(prop_type, ""))[:50]  # Truncate long values
+
+    def prioritize_columns(self, properties: dict[str, Any]) -> list[str]:
+        """Prioritize columns based on importance and type."""
+        # Define priority levels
+        high_priority = []
+        medium_priority = []
+        low_priority = []
+        hidden_types = {
+            "created_by",
+            "last_edited_by",
+            "created_time",
+            "last_edited_time",
+        }
+
+        for prop_name, prop_data in properties.items():
+            prop_type = prop_data.get("type", "")
+            prop_name_lower = prop_name.lower()
+
+            # Skip hidden types
+            if prop_type in hidden_types:
+                continue
+
+            # High priority: title-like properties
+            if prop_type == "title" or prop_name_lower in {
+                "name",
+                "title",
+                "task",
+                "item",
+                "entry",
+            }:
+                high_priority.append(prop_name)
+
+            # High priority: status-like properties
+            elif prop_type in {"status", "select"} and prop_name_lower in {
+                "status",
+                "state",
+                "stage",
+                "phase",
+                "priority",
+            }:
+                high_priority.append(prop_name)
+
+            # Medium priority: important data types
+            elif prop_type in {"date", "number", "checkbox", "people", "multi_select"}:
+                medium_priority.append(prop_name)
+
+            # Medium priority: common important names
+            elif prop_name_lower in {
+                "assignee",
+                "owner",
+                "due",
+                "deadline",
+                "tags",
+                "category",
+                "type",
+            }:
+                medium_priority.append(prop_name)
+
+            # Low priority: everything else
+            else:
+                low_priority.append(prop_name)
+
+        # Combine in priority order
+        return high_priority + medium_priority + low_priority
+
+    def calculate_optimal_columns(
+        self,
+        properties: dict[str, Any],
+        terminal_width: int,
+        user_columns: list[str] | None = None,
+    ) -> tuple[list[str], list[int]]:
+        """Calculate optimal columns and widths based on terminal size."""
+        if user_columns:
+            # User specified columns - validate they exist
+            valid_columns = [col for col in user_columns if col in properties]
+            if not valid_columns:
+                # Fallback to prioritized if no valid user columns
+                prioritized = self.prioritize_columns(properties)
+                valid_columns = prioritized
+            columns = valid_columns
+        else:
+            # Use smart prioritization
+            columns = self.prioritize_columns(properties)
+
+        # Calculate available width (account for borders and spacing)
+        # Each column needs: content + 2 spaces + 1 border = 3 extra chars minimum
+        border_overhead = len(columns) * 3 + 1  # +1 for final border
+        available_width = max(terminal_width - border_overhead, 60)  # Increased minimum
+
+        # Calculate widths
+        widths = []
+        if not columns:
+            return [], []
+
+        # Define priority weights for different column types
+        min_width = 8  # Minimum readable width
+
+        # First pass: assign base widths based on column type importance
+        type_weights = {}
+        total_weight = 0
+
+        for col_name in columns:
+            prop_data = properties.get(col_name, {})
+            prop_type = prop_data.get("type", "")
+
+            # Assign weights based on content type and importance
+            if prop_type == "title":
+                weight = 3.0  # Titles need more space
+            elif prop_type in {"rich_text", "url", "email"}:
+                weight = 2.5  # Text content needs space
+            elif prop_type in {"select", "status", "multi_select"}:
+                weight = 1.5  # Status/select moderate space
+            elif prop_type == "files":
+                weight = 2.0  # File names can be long
+            elif prop_type in {"date", "number"}:
+                weight = 1.0  # Dates/numbers are compact
+            elif prop_type == "checkbox":
+                weight = 0.5  # Checkboxes minimal space
+            else:
+                weight = 1.5  # Default moderate space
+
+            type_weights[col_name] = weight
+            total_weight += weight
+
+        # Second pass: distribute available width proportionally
+        for col_name in columns:
+            if total_weight > 0:
+                weight_ratio = type_weights[col_name] / total_weight
+                proportional_width = int(weight_ratio * available_width)
+                width = max(proportional_width, min_width)
+            else:
+                width = min_width
+
+            widths.append(width)
+
+        # If we exceed terminal width, trim columns from the end
+        total_width = sum(widths) + border_overhead
+        while total_width > terminal_width and len(columns) > 1:
+            columns.pop()
+            widths.pop()
+            total_width = sum(widths) + border_overhead
+
+        return columns, widths
