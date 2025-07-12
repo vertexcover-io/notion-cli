@@ -40,18 +40,17 @@ class LLMService:
         if "gpt" in model_lower or "openai" in model_lower:
             if not os.getenv("OPENAI_API_KEY"):
                 raise ValueError(
-                    "OpenAI API key not found. Set OPENAI_API_KEY environment variable."
+                    "OpenAI API key not found. Set OPENAI_API_KEY environment variable.",
                 )
         elif "claude" in model_lower or "anthropic" in model_lower:
             if not os.getenv("ANTHROPIC_API_KEY"):
                 raise ValueError(
-                    "Anthropic API key not found. "
-                    "Set ANTHROPIC_API_KEY environment variable."
+                    "Anthropic API key not found. " "Set ANTHROPIC_API_KEY environment variable.",
                 )
         elif "gemini" in model_lower or "google" in model_lower:
             if not os.getenv("GOOGLE_API_KEY"):
                 raise ValueError(
-                    "Google API key not found. Set GOOGLE_API_KEY environment variable."
+                    "Google API key not found. Set GOOGLE_API_KEY environment variable.",
                 )
 
     def generate_structured_data(
@@ -60,11 +59,16 @@ class LLMService:
         schema: dict[str, Any],
         context: str = "",
         allow_revision: bool = False,
-        files: list[str] | None = None
+        files: list[str] | None = None,
     ) -> dict[str, Any]:
         """Generate structured data based on a prompt and schema."""
         return self._generate_with_revision(
-            prompt, schema, context, allow_revision, self._structured_data_generator, files=files
+            prompt,
+            schema,
+            context,
+            allow_revision,
+            self._structured_data_generator,
+            files=files,
         )
 
     def _generate_with_revision(
@@ -74,7 +78,7 @@ class LLMService:
         context: str,
         allow_revision: bool,
         generator_func,
-        **kwargs
+        **kwargs,
     ) -> dict[str, Any]:
         """Generate data with optional revision capability."""
         import typer
@@ -122,10 +126,16 @@ class LLMService:
                     new_prompt = typer.prompt("Enter revised prompt")
                     if new_prompt.strip():
                         current_prompt = new_prompt
-                        console.print("🔄 Regenerating with revised prompt...", style="yellow")
+                        console.print(
+                            "🔄 Regenerating with revised prompt...",
+                            style="yellow",
+                        )
                         continue
                     else:
-                        console.print("❌ Empty prompt, keeping original", style="yellow")
+                        console.print(
+                            "❌ Empty prompt, keeping original",
+                            style="yellow",
+                        )
                         continue
                 elif choice == 3:
                     raise ValueError("Operation cancelled by user")
@@ -135,8 +145,14 @@ class LLMService:
 
             except json.JSONDecodeError as e:
                 if allow_revision:
-                    console.print(f"❌ Failed to parse LLM response as JSON: {e}", style="red")
-                    console.print("🔄 Please revise your prompt to be more specific", style="yellow")
+                    console.print(
+                        f"❌ Failed to parse LLM response as JSON: {e}",
+                        style="red",
+                    )
+                    console.print(
+                        "🔄 Please revise your prompt to be more specific",
+                        style="yellow",
+                    )
                     new_prompt = typer.prompt("Enter revised prompt")
                     if new_prompt.strip():
                         current_prompt = new_prompt
@@ -163,12 +179,13 @@ class LLMService:
         prompt: str,
         schema: dict[str, Any],
         context: str = "",
-        files: list[str] | None = None
+        files: list[str] | None = None,
     ) -> dict[str, Any]:
         """Internal method to generate structured data."""
         file_context = ""
         if files:
             import os
+
             file_info = []
             for file_path in files:
                 if os.path.exists(file_path):
@@ -177,10 +194,10 @@ class LLMService:
                     file_info.append(f"- {file_name} ({file_size} bytes)")
                 else:
                     file_info.append(f"- {file_path} (file not found)")
-            
+
             if file_info:
-                file_context = f"\nFiles to be uploaded:\n" + "\n".join(file_info) + "\n"
-        
+                file_context = "\nFiles to be uploaded:\n" + "\n".join(file_info) + "\n"
+
         system_prompt = (
             "You are a helpful assistant that converts natural language "
             "prompts into structured data.\n\n"
@@ -213,11 +230,11 @@ Respond with valid JSON only:"""
             model=self.config.model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
 
         content = response.choices[0].message.content
@@ -226,7 +243,7 @@ Respond with valid JSON only:"""
     def generate_filters_from_prompt(
         self,
         prompt: str,
-        properties: dict[str, Any]
+        properties: dict[str, Any],
     ) -> str:
         """Generate filter expressions from natural language."""
 
@@ -243,7 +260,6 @@ Respond with valid JSON only:"""
             elif prop_type == "multi_select" and "multi_select" in prop_data:
                 options = prop_data["multi_select"].get("options", [])
                 prop_info[name]["options"] = [opt.get("name", "") for opt in options]
-
 
         system_prompt = (
             "You are a database query assistant. Your job is to identify which "
@@ -288,10 +304,10 @@ Filter expression:"""
                 model=self.config.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.1,
-                max_tokens=500
+                max_tokens=500,
             )
 
             return response.choices[0].message.content.strip()
@@ -304,7 +320,7 @@ Filter expression:"""
         prompt: str,
         properties: dict[str, Any],
         current_data: dict[str, Any] | None = None,
-        files: list[str] | None = None
+        files: list[str] | None = None,
     ) -> dict[str, Any]:
         """Generate update data from natural language prompt."""
 
@@ -314,10 +330,11 @@ Filter expression:"""
         context = f"Available properties: {list(properties.keys())}"
         if current_data:
             context += f"\nCurrent data: {json.dumps(current_data, indent=2)}"
-        
+
         file_context = ""
         if files:
             import os
+
             file_info = []
             for file_path in files:
                 if os.path.exists(file_path):
@@ -326,9 +343,9 @@ Filter expression:"""
                     file_info.append(f"- {file_name} ({file_size} bytes)")
                 else:
                     file_info.append(f"- {file_path} (file not found)")
-            
+
             if file_info:
-                file_context = f"\nFiles to be uploaded:\n" + "\n".join(file_info)
+                file_context = "\nFiles to be uploaded:\n" + "\n".join(file_info)
 
         system_prompt = (
             "You are updating database entries. Convert the update request "
@@ -353,11 +370,11 @@ JSON for updates:"""
                 model=self.config.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.1,
                 max_tokens=1000,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
 
             content = response.choices[0].message.content
@@ -378,94 +395,84 @@ JSON for updates:"""
             if prop_type == "title":
                 schema["properties"][prop_name] = {
                     "type": "string",
-                    "description": "Title/name field"
+                    "description": "Title/name field",
                 }
             elif prop_type == "rich_text":
                 schema["properties"][prop_name] = {
                     "type": "string",
-                    "description": "Rich text content"
+                    "description": "Rich text content",
                 }
             elif prop_type == "number":
                 schema["properties"][prop_name] = {
                     "type": "number",
-                    "description": "Numeric value"
+                    "description": "Numeric value",
                 }
             elif prop_type == "select":
                 options = []
                 if "select" in prop_data and "options" in prop_data["select"]:
-                    options = [
-                        opt.get("name", "") for opt in prop_data["select"]["options"]
-                    ]
+                    options = [opt.get("name", "") for opt in prop_data["select"]["options"]]
                 schema["properties"][prop_name] = {
                     "type": "string",
                     "enum": options,
-                    "description": f"Select one of: {options}"
+                    "description": f"Select one of: {options}",
                 }
             elif prop_type == "multi_select":
                 options = []
-                if (
-                    "multi_select" in prop_data
-                    and "options" in prop_data["multi_select"]
-                ):
-                    options = [
-                        opt.get("name", "")
-                        for opt in prop_data["multi_select"]["options"]
-                    ]
+                if "multi_select" in prop_data and "options" in prop_data["multi_select"]:
+                    options = [opt.get("name", "") for opt in prop_data["multi_select"]["options"]]
                 schema["properties"][prop_name] = {
                     "type": "array",
                     "items": {"type": "string", "enum": options},
-                    "description": f"Select multiple from: {options}"
+                    "description": f"Select multiple from: {options}",
                 }
             elif prop_type == "date":
                 schema["properties"][prop_name] = {
                     "type": "string",
                     "format": "date",
-                    "description": "Date in YYYY-MM-DD format"
+                    "description": "Date in YYYY-MM-DD format",
                 }
             elif prop_type == "checkbox":
                 schema["properties"][prop_name] = {
                     "type": "boolean",
-                    "description": "True/false value"
+                    "description": "True/false value",
                 }
             elif prop_type == "url":
                 schema["properties"][prop_name] = {
                     "type": "string",
                     "format": "uri",
-                    "description": "URL address"
+                    "description": "URL address",
                 }
             elif prop_type == "email":
                 schema["properties"][prop_name] = {
                     "type": "string",
                     "format": "email",
-                    "description": "Email address"
+                    "description": "Email address",
                 }
             elif prop_type == "phone_number":
                 schema["properties"][prop_name] = {
                     "type": "string",
-                    "description": "Phone number"
+                    "description": "Phone number",
                 }
             elif prop_type == "status":
                 options = []
                 if "status" in prop_data and "options" in prop_data["status"]:
-                    options = [
-                        opt.get("name", "") for opt in prop_data["status"]["options"]
-                    ]
+                    options = [opt.get("name", "") for opt in prop_data["status"]["options"]]
                 schema["properties"][prop_name] = {
                     "type": "string",
                     "enum": options,
-                    "description": f"Status: {options}"
+                    "description": f"Status: {options}",
                 }
             elif prop_type == "files":
                 schema["properties"][prop_name] = {
                     "type": "string",
                     "enum": ["__FILE__"],
-                    "description": "File attachment - use '__FILE__' to indicate a file should be uploaded"
+                    "description": "File attachment - use '__FILE__' to indicate a file should be uploaded",
                 }
             else:
                 # Default to string for unknown types
                 schema["properties"][prop_name] = {
                     "type": "string",
-                    "description": f"Field of type {prop_type}"
+                    "description": f"Field of type {prop_type}",
                 }
 
         return schema

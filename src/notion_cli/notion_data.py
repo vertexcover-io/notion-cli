@@ -9,7 +9,7 @@ class NotionDataConverter:
     @staticmethod
     def convert_to_notion_properties(
         data: dict[str, Any],
-        properties_schema: dict[str, Any]
+        properties_schema: dict[str, Any],
     ) -> dict[str, Any]:
         """Convert structured data to Notion properties format."""
         notion_properties = {}
@@ -24,11 +24,11 @@ class NotionDataConverter:
             # Convert based on property type
             if prop_type == "title":
                 notion_properties[field_name] = {
-                    "title": [{"text": {"content": str(value)}}]
+                    "title": [{"text": {"content": str(value)}}],
                 }
             elif prop_type == "rich_text":
                 notion_properties[field_name] = {
-                    "rich_text": [{"text": {"content": str(value)}}]
+                    "rich_text": [{"text": {"content": str(value)}}],
                 }
             elif prop_type == "number":
                 try:
@@ -40,13 +40,13 @@ class NotionDataConverter:
             elif prop_type == "multi_select":
                 if isinstance(value, list):
                     notion_properties[field_name] = {
-                        "multi_select": [{"name": str(v)} for v in value]
+                        "multi_select": [{"name": str(v)} for v in value],
                     }
                 else:
                     # Handle comma-separated string
                     values = [v.strip() for v in str(value).split(",")]
                     notion_properties[field_name] = {
-                        "multi_select": [{"name": v} for v in values]
+                        "multi_select": [{"name": v} for v in values],
                     }
             elif prop_type == "date":
                 # Expect ISO date format
@@ -82,7 +82,7 @@ class NotionDataConverter:
             else:
                 # Default to rich text for unknown types
                 notion_properties[field_name] = {
-                    "rich_text": [{"text": {"content": str(value)}}]
+                    "rich_text": [{"text": {"content": str(value)}}],
                 }
 
         return notion_properties
@@ -96,21 +96,19 @@ class NotionDataConverter:
             prop_type = prop_data.get("type", "")
 
             if prop_type == "title" and prop_data.get("title"):
-                simple_data[prop_name] = "".join([
-                    t.get("plain_text", "") for t in prop_data["title"]
-                ])
+                simple_data[prop_name] = "".join(
+                    [t.get("plain_text", "") for t in prop_data["title"]],
+                )
             elif prop_type == "rich_text" and prop_data.get("rich_text"):
-                simple_data[prop_name] = "".join([
-                    t.get("plain_text", "") for t in prop_data["rich_text"]
-                ])
+                simple_data[prop_name] = "".join(
+                    [t.get("plain_text", "") for t in prop_data["rich_text"]],
+                )
             elif prop_type == "number":
                 simple_data[prop_name] = prop_data.get("number")
             elif prop_type == "select" and prop_data.get("select"):
                 simple_data[prop_name] = prop_data["select"].get("name", "")
             elif prop_type == "multi_select" and prop_data.get("multi_select"):
-                simple_data[prop_name] = [
-                    s.get("name", "") for s in prop_data["multi_select"]
-                ]
+                simple_data[prop_name] = [s.get("name", "") for s in prop_data["multi_select"]]
             elif prop_type == "date" and prop_data.get("date"):
                 simple_data[prop_name] = prop_data["date"].get("start", "")
             elif prop_type == "checkbox":

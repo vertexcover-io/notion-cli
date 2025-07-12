@@ -81,5 +81,5 @@ class ViewsManager:
         for name, view in views.items():
             data[name] = asdict(view)
 
-        with open(self.views_path, 'w') as f:
+        with open(self.views_path, "w") as f:
             json.dump(data, f, indent=2)

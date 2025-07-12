@@ -1,11 +1,11 @@
 """Main CLI application entry point."""
-import traceback
-import shutil
-from pathlib import Path
-import io
 
-import typer
+import shutil
+import traceback
+from pathlib import Path
+
 import questionary
+import typer
 from md2notionpage.core import parse_md
 from rich.console import Console
 from rich.table import Table
@@ -18,7 +18,7 @@ from .notion_data import NotionDataConverter
 from .views import DatabaseView, ViewsManager
 
 app = typer.Typer(
-    help="A CLI tool for Notion database operations using natural language"
+    help="A CLI tool for Notion database operations using natural language",
 )
 auth_app = typer.Typer(help="Authentication commands")
 db_app = typer.Typer(help="Database commands")
@@ -51,7 +51,8 @@ def setup_auth(
             console.print(f"Config saved to: {config_manager.config_path}")
         else:
             console.print(
-                "❌ Authentication failed. Please check your token.", style="red"
+                "❌ Authentication failed. Please check your token.",
+                style="red",
             )
 
     except Exception as e:
@@ -123,10 +124,16 @@ def list_databases() -> None:
 def show_database(
     name: str = typer.Argument(..., help="Database name to show entries for"),
     limit: int | None = typer.Option(
-        None, "--limit", "-l", help="Number of entries to show"
+        None,
+        "--limit",
+        "-l",
+        help="Number of entries to show",
     ),
     columns: str = typer.Option(
-        None, "--columns", "-c", help="Comma-separated list of columns to show"
+        None,
+        "--columns",
+        "-c",
+        help="Comma-separated list of columns to show",
     ),
     filter_expr: str = typer.Option(
         None,
@@ -148,7 +155,8 @@ def show_database(
         if not database:
             console.print(f"❌ Database '{name}' not found.", style="red")
             console.print(
-                "Use 'notion db list' to see available databases.", style="yellow"
+                "Use 'notion db list' to see available databases.",
+                style="yellow",
             )
             raise typer.Exit(1)
 
@@ -207,7 +215,9 @@ def show_database(
 
         # Calculate optimal columns and widths
         displayed_props, column_widths = client.calculate_optimal_columns(
-            properties, terminal_width, user_columns
+            properties,
+            terminal_width,
+            user_columns,
         )
 
         if not displayed_props:
@@ -248,17 +258,17 @@ def show_database(
 
                             # Reserve space for markup
                             if len(display_text) > max_len - 10:
-                                display_text = display_text[:max_len - 13] + "..."
+                                display_text = display_text[: max_len - 13] + "..."
 
                             value = f"{url_part}{display_text}[/link]"
                     except (ValueError, IndexError):
                         # Fallback to simple truncation if parsing fails
                         if len(value) > max_len:
-                            value = value[:max_len - 3] + "..."
+                            value = value[: max_len - 3] + "..."
                 else:
                     # Simple truncation for non-link text
                     if len(value) > max_len:
-                        value = value[:max_len - 3] + "..."
+                        value = value[: max_len - 3] + "..."
 
                 row_values.append(value or "—")
 
@@ -275,7 +285,8 @@ def show_database(
             if invalid_columns:
                 invalid_str = ", ".join(invalid_columns)
                 console.print(
-                    f"\n⚠️  Invalid columns ignored: {invalid_str}", style="yellow"
+                    f"\n⚠️  Invalid columns ignored: {invalid_str}",
+                    style="yellow",
                 )
 
         if displayed_count < total_properties:
@@ -289,7 +300,8 @@ def show_database(
                 available_str = ", ".join(available)
                 suffix = "..." if len(available) == 5 else ""
                 console.print(
-                    f"💡 Available columns: {available_str}{suffix}", style="dim"
+                    f"💡 Available columns: {available_str}{suffix}",
+                    style="dim",
                 )
 
         if limit is not None and len(all_entries) > limit:
@@ -310,7 +322,7 @@ def show_database(
                     columns=user_columns,
                     filter_expr=filter_expr,
                     limit=limit,
-                    description=f"Saved view for {name} database"
+                    description=f"Saved view for {name} database",
                 )
                 views_manager.save_view(view)
                 msg = f"✅ View '{save_view}' saved successfully!"
@@ -331,6 +343,7 @@ def show_database(
 
 
 # View management commands
+
 
 @view_app.command("list")
 def list_views() -> None:
@@ -360,7 +373,7 @@ def list_views() -> None:
                 view.database_name,
                 columns_str,
                 filter_str,
-                limit_str
+                limit_str,
             )
 
         console.print(table)
@@ -372,7 +385,7 @@ def list_views() -> None:
 
 @view_app.command("show")
 def show_view(
-    view_name: str = typer.Argument(..., help="Name of the view to show")
+    view_name: str = typer.Argument(..., help="Name of the view to show"),
 ) -> None:
     """Show a database using a saved view."""
     try:
@@ -391,7 +404,7 @@ def show_view(
             limit=view.limit,
             columns=", ".join(view.columns) if view.columns else None,
             filter_expr=view.filter_expr,
-            save_view=None  # Don't save when loading a view
+            save_view=None,  # Don't save when loading a view
         )
 
     except Exception as e:
@@ -401,7 +414,7 @@ def show_view(
 
 @view_app.command("delete")
 def delete_view(
-    view_name: str = typer.Argument(..., help="Name of the view to delete")
+    view_name: str = typer.Argument(..., help="Name of the view to delete"),
 ) -> None:
     """Delete a saved view."""
     try:
@@ -422,7 +435,10 @@ def delete_view(
 def update_view(
     view_name: str = typer.Argument(..., help="Name of the view to update"),
     columns: str = typer.Option(
-        None, "--columns", "-c", help="Comma-separated list of columns to show"
+        None,
+        "--columns",
+        "-c",
+        help="Comma-separated list of columns to show",
     ),
     filter_expr: str = typer.Option(
         None,
@@ -431,16 +447,25 @@ def update_view(
         help="Filter expression (e.g., 'status=Done', 'tags in urgent')",
     ),
     limit: int | None = typer.Option(
-        None, "--limit", "-l", help="Number of entries to show"
+        None,
+        "--limit",
+        "-l",
+        help="Number of entries to show",
     ),
     clear_filter: bool = typer.Option(
-        False, "--clear-filter", help="Clear the current filter"
+        False,
+        "--clear-filter",
+        help="Clear the current filter",
     ),
     clear_columns: bool = typer.Option(
-        False, "--clear-columns", help="Clear custom columns (show all)"
+        False,
+        "--clear-columns",
+        help="Clear custom columns (show all)",
     ),
     clear_limit: bool = typer.Option(
-        False, "--clear-limit", help="Clear the limit (show all entries)"
+        False,
+        "--clear-limit",
+        help="Clear the limit (show all entries)",
     ),
 ) -> None:
     """Update an existing saved view with new filters, columns, or limits."""
@@ -451,7 +476,8 @@ def update_view(
         if not view:
             console.print(f"❌ View '{view_name}' not found.", style="red")
             console.print(
-                "Use 'notion view list' to see available views.", style="yellow"
+                "Use 'notion view list' to see available views.",
+                style="yellow",
             )
             raise typer.Exit(1)
 
@@ -486,7 +512,7 @@ def update_view(
             console.print(
                 "❌ No updates specified. Use --columns, --filter, --limit, or "
                 "their --clear-variants.",
-                style="red"
+                style="red",
             )
             raise typer.Exit(1)
 
@@ -520,21 +546,34 @@ def update_view(
 
 # LLM-powered database entry commands
 
+
 @db_app.command("create")
 def create_entry(
     database_name: str = typer.Argument(..., help="Database name to create entry in"),
     prompt: str = typer.Argument(..., help="Natural language description of the entry"),
     model: str = typer.Option(
-        None, "--model", "-m", help="LLM model to use (default: gpt-4.1)"
+        None,
+        "--model",
+        "-m",
+        help="LLM model to use (default: gpt-4.1)",
     ),
     auto_confirm: bool = typer.Option(
-        False, "--yes", "-y", help="Skip confirmation prompt"
+        False,
+        "--yes",
+        "-y",
+        help="Skip confirmation prompt",
     ),
     interactive: bool = typer.Option(
-        False, "--interactive", "-i", help="Enable interactive prompt revision"
+        False,
+        "--interactive",
+        "-i",
+        help="Enable interactive prompt revision",
     ),
     files: list[str] = typer.Option(
-        None, "--file", "-f", help="File paths to upload and attach to entry"
+        None,
+        "--file",
+        "-f",
+        help="File paths to upload and attach to entry",
     ),
 ) -> None:
     """Create a new database entry using natural language."""
@@ -546,7 +585,7 @@ def create_entry(
             console.print(f"❌ Database '{database_name}' not found.", style="red")
             console.print(
                 "Use 'notion db list' to see available databases.",
-                style="yellow"
+                style="yellow",
             )
             raise typer.Exit(1)
 
@@ -569,29 +608,32 @@ def create_entry(
                 schema=schema,
                 context=f"Creating entry in Notion database '{database_name}'",
                 allow_revision=interactive,
-                files=files
+                files=files,
             )
 
         # Handle file uploads if files were provided
         if files:
             # Find file properties marked with __FILE__
             file_properties = [
-                prop_name for prop_name, value in structured_data.items() 
-                if value == "__FILE__"
+                prop_name for prop_name, value in structured_data.items() if value == "__FILE__"
             ]
-            
+
             if file_properties:
                 with console.status(f"📁 Uploading {len(files)} file(s) to Notion..."):
                     file_data = client.prepare_file_properties(files, file_properties)
-                console.print(f"✅ Successfully uploaded {len(files)} file(s)!", style="green")
-                
+                console.print(
+                    f"✅ Successfully uploaded {len(files)} file(s)!",
+                    style="green",
+                )
+
                 # Update structured data with actual file objects
                 for prop_name, file_objects in file_data.items():
                     structured_data[prop_name] = file_objects
 
         # Convert to Notion format
         notion_properties = NotionDataConverter.convert_to_notion_properties(
-            structured_data, properties
+            structured_data,
+            properties,
         )
 
         if not notion_properties:
@@ -642,13 +684,22 @@ def edit_entries(
     database_name: str = typer.Argument(..., help="Database name to edit entries in"),
     prompt: str = typer.Argument(..., help="Natural language description of changes"),
     model: str = typer.Option(
-        None, "--model", "-m", help="LLM model to use (default: gpt-3.5-turbo)"
+        None,
+        "--model",
+        "-m",
+        help="LLM model to use (default: gpt-3.5-turbo)",
     ),
     auto_confirm: bool = typer.Option(
-        False, "--yes", "-y", help="Skip confirmation prompt"
+        False,
+        "--yes",
+        "-y",
+        help="Skip confirmation prompt",
     ),
     files: list[str] = typer.Option(
-        None, "--file", "-f", help="File paths to upload and attach to entries"
+        None,
+        "--file",
+        "-f",
+        help="File paths to upload and attach to entries",
     ),
 ) -> None:
     """Edit database entries using natural language."""
@@ -660,7 +711,7 @@ def edit_entries(
             console.print(f"❌ Database '{database_name}' not found.", style="red")
             console.print(
                 "Use 'notion db list' to see available databases.",
-                style="yellow"
+                style="yellow",
             )
             raise typer.Exit(1)
 
@@ -678,7 +729,8 @@ def edit_entries(
         # Generate filter from prompt
         with console.status("🧠 Analyzing prompt to find entries..."):
             filter_expression = llm_service.generate_filters_from_prompt(
-                prompt, properties
+                prompt,
+                properties,
             )
 
         console.print(f"🔍 Generated filter: {filter_expression}")
@@ -738,7 +790,9 @@ def edit_entries(
         # Generate updates
         with console.status("🧠 Generating updates..."):
             update_data = llm_service.generate_updates_from_prompt(
-                prompt, properties, files=files if files else None
+                prompt,
+                properties,
+                files=files if files else None,
             )
 
         if not update_data:
@@ -764,15 +818,17 @@ def edit_entries(
         if files:
             # Find file properties marked with __FILE__
             file_properties = [
-                prop_name for prop_name, value in update_data.items() 
-                if value == "__FILE__"
+                prop_name for prop_name, value in update_data.items() if value == "__FILE__"
             ]
-            
+
             if file_properties:
                 with console.status(f"📁 Uploading {len(files)} file(s) to Notion..."):
                     file_data = client.prepare_file_properties(files, file_properties)
-                console.print(f"✅ Successfully uploaded {len(files)} file(s)!", style="green")
-                
+                console.print(
+                    f"✅ Successfully uploaded {len(files)} file(s)!",
+                    style="green",
+                )
+
                 # Update structured data with actual file objects
                 for prop_name, file_objects in file_data.items():
                     update_data[prop_name] = file_objects
@@ -780,7 +836,8 @@ def edit_entries(
         # Confirm updates
         if not auto_confirm:
             console.print(
-                f"\n⚠️ This will update {len(entries)} entries", style="yellow"
+                f"\n⚠️ This will update {len(entries)} entries",
+                style="yellow",
             )
             confirm = typer.confirm("✨ Proceed with updates?")
             if not confirm:
@@ -789,7 +846,8 @@ def edit_entries(
 
         # Convert to Notion format
         notion_updates = NotionDataConverter.convert_to_notion_properties(
-            update_data, properties
+            update_data,
+            properties,
         )
 
         # Apply updates
@@ -802,12 +860,12 @@ def edit_entries(
                 except Exception as e:
                     console.print(
                         f"⚠️ Failed to update entry {entry['id']}: {e}",
-                        style="yellow"
+                        style="yellow",
                     )
 
         console.print(
             f"✅ Successfully updated {success_count}/{len(entries)} entries!",
-            style="green"
+            style="green",
         )
 
     except Exception as e:
@@ -818,9 +876,7 @@ def edit_entries(
 @db_app.command("link")
 def get_database_link(
     database_name: str = typer.Argument(..., help="Database name to get link for"),
-    copy: bool = typer.Option(
-        False, "--copy", "-c", help="Copy the link to clipboard"
-    ),
+    copy: bool = typer.Option(False, "--copy", "-c", help="Copy the link to clipboard"),
 ) -> None:
     """Get the link for a specific database."""
     try:
@@ -830,7 +886,8 @@ def get_database_link(
         if not database:
             console.print(f"❌ Database '{database_name}' not found.", style="red")
             console.print(
-                "Use 'notion db list' to see available databases.", style="yellow"
+                "Use 'notion db list' to see available databases.",
+                style="yellow",
             )
             raise typer.Exit(1)
 
@@ -854,12 +911,13 @@ def get_database_link(
         if copy:
             try:
                 import pyperclip
+
                 pyperclip.copy(db_url)
                 console.print("✅ Link copied to clipboard!", style="green")
             except ImportError:
                 console.print(
-                    "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
-                    style="yellow"
+                    "⚠️ pyperclip not installed. Install with: pip install pyperclip",
+                    style="yellow",
                 )
             except Exception as e:
                 console.print(f"⚠️ Failed to copy to clipboard: {e}", style="yellow")
@@ -877,23 +935,37 @@ def get_entry_link(
     database_name: str = typer.Argument(..., help="Database name"),
     entry_name: str = typer.Argument(..., help="Entry name to get link for"),
     exact: bool = typer.Option(
-        False, "--exact", "-e", help="Use exact matching instead of fuzzy search"
+        False,
+        "--exact",
+        "-e",
+        help="Use exact matching instead of fuzzy search",
     ),
-    copy: bool = typer.Option(
-        False, "--copy", "-c", help="Copy the link to clipboard"
-    ),
+    copy: bool = typer.Option(False, "--copy", "-c", help="Copy the link to clipboard"),
     limit: int = typer.Option(
-        5, "--limit", "-l", help="Maximum number of results to show"
+        5,
+        "--limit",
+        "-l",
+        help="Maximum number of results to show",
     ),
 ) -> None:
     """Get the link for a specific database entry."""
     try:
         client = NotionClientWrapper()
-        entries = client.get_database_entry_by_name(database_name, entry_name, fuzzy=not exact)
+        entries = client.get_database_entry_by_name(
+            database_name,
+            entry_name,
+            fuzzy=not exact,
+        )
 
         if not entries:
-            console.print(f"❌ No entries found matching '{entry_name}' in database '{database_name}'.", style="red")
-            console.print(f"Use 'notion db show \"{database_name}\"' to see all entries.", style="yellow")
+            console.print(
+                f"❌ No entries found matching '{entry_name}' in database '{database_name}'.",
+                style="red",
+            )
+            console.print(
+                f"Use 'notion db show \"{database_name}\"' to see all entries.",
+                style="yellow",
+            )
             raise typer.Exit(1)
 
         # If multiple entries found, show them for selection
@@ -901,24 +973,28 @@ def get_entry_link(
             # Limit results
             if len(entries) > limit:
                 entries = entries[:limit]
-                console.print(f"📊 Showing top {limit} results (found {len(entries)} total)")
+                console.print(
+                    f"📊 Showing top {limit} results (found {len(entries)} total)",
+                )
             else:
-                console.print(f"📊 Found {len(entries)} entry(s) matching '{entry_name}'")
+                console.print(
+                    f"📊 Found {len(entries)} entry(s) matching '{entry_name}'",
+                )
 
             for i, entry in enumerate(entries, 1):
                 title = entry.get("_title", "Untitled")
                 match_score = entry.get("_match_score", 0)
                 entry_id = entry.get("id", "")
-                
+
                 # Get URLs
                 urls = client.get_entry_urls(entry)
-                
+
                 console.print(f"\n{i}. {title}", style="bold cyan")
                 console.print(f"   Match Score: {match_score:.2f}", style="dim")
                 console.print(f"   Entry ID: {entry_id}", style="dim")
                 console.print(f"   Private URL: {urls['private']}", style="blue")
-                
-                if urls['public']:
+
+                if urls["public"]:
                     console.print(f"   Public URL: {urls['public']}", style="green")
                 else:
                     console.print("   Public URL: Not shared publicly", style="yellow")
@@ -926,13 +1002,17 @@ def get_entry_link(
             # Ask user to select one if copy is requested
             if copy and len(entries) > 1:
                 try:
-                    choice = typer.prompt(f"\nWhich entry would you like to copy? (1-{len(entries)})", type=int)
+                    choice = typer.prompt(
+                        f"\nWhich entry would you like to copy? (1-{len(entries)})",
+                        type=int,
+                    )
                     if 1 <= choice <= len(entries):
                         entry = entries[choice - 1]
                         urls = client.get_entry_urls(entry)
-                        
+
                         import pyperclip
-                        pyperclip.copy(urls['private'])
+
+                        pyperclip.copy(urls["private"])
                         console.print("✅ Link copied to clipboard!", style="green")
                     else:
                         console.print("❌ Invalid choice.", style="red")
@@ -940,8 +1020,8 @@ def get_entry_link(
                     console.print("❌ Copy cancelled.", style="yellow")
                 except ImportError:
                     console.print(
-                        "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
-                        style="yellow"
+                        "⚠️ pyperclip not installed. Install with: pip install pyperclip",
+                        style="yellow",
                     )
         else:
             # Single entry - show details and copy if requested
@@ -951,20 +1031,21 @@ def get_entry_link(
 
             console.print(f"📊 Entry: {title}", style="bold cyan")
             console.print(f"🔗 Private URL: {urls['private']}", style="blue")
-            
-            if urls['public']:
+
+            if urls["public"]:
                 console.print(f"🌐 Public URL: {urls['public']}", style="green")
 
             # Copy to clipboard if requested
             if copy:
                 try:
                     import pyperclip
-                    pyperclip.copy(urls['private'])
+
+                    pyperclip.copy(urls["private"])
                     console.print("✅ Link copied to clipboard!", style="green")
                 except ImportError:
                     console.print(
-                        "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
-                        style="yellow"
+                        "⚠️ pyperclip not installed. Install with: pip install pyperclip",
+                        style="yellow",
                     )
                 except Exception as e:
                     console.print(f"⚠️ Failed to copy to clipboard: {e}", style="yellow")
@@ -978,6 +1059,7 @@ def get_entry_link(
 
 
 # Page management commands
+
 
 @page_app.command("list")
 def list_pages() -> None:
@@ -1016,10 +1098,16 @@ def list_pages() -> None:
 def find_page(
     name: str = typer.Argument(..., help="Page name to search for"),
     exact: bool = typer.Option(
-        False, "--exact", "-e", help="Use exact matching instead of fuzzy search"
+        False,
+        "--exact",
+        "-e",
+        help="Use exact matching instead of fuzzy search",
     ),
     limit: int = typer.Option(
-        10, "--limit", "-l", help="Maximum number of results to show"
+        10,
+        "--limit",
+        "-l",
+        help="Maximum number of results to show",
     ),
 ) -> None:
     """Find pages by name and show their links."""
@@ -1043,16 +1131,16 @@ def find_page(
             title = page.get("_title", "Untitled")
             match_score = page.get("_match_score", 0)
             page_id = page.get("id", "")
-            
+
             # Get URLs
             urls = client.get_page_urls(page)
-            
+
             console.print(f"\n{i}. {title}", style="bold cyan")
             console.print(f"   Match Score: {match_score:.2f}", style="dim")
             console.print(f"   Page ID: {page_id}", style="dim")
             console.print(f"   Private URL: {urls['private']}", style="blue")
-            
-            if urls['public']:
+
+            if urls["public"]:
                 console.print(f"   Public URL: {urls['public']}", style="green")
             else:
                 console.print("   Public URL: Not shared publicly", style="yellow")
@@ -1076,10 +1164,16 @@ def create_page(
         readable=True,
     ),
     parent_page_name: str = typer.Option(
-        None, "--parent-name", "-n", help="The name of the parent page."
+        None,
+        "--parent-name",
+        "-n",
+        help="The name of the parent page.",
     ),
     parent_page_id: str = typer.Option(
-        None, "--parent-id", "-p", help="The ID of the parent page."
+        None,
+        "--parent-id",
+        "-p",
+        help="The ID of the parent page.",
     ),
 ) -> None:
     """Create a new page from a local file."""
@@ -1095,7 +1189,8 @@ def create_page(
                 pages = client.get_page_by_name(parent_page_name)
                 if not pages:
                     console.print(
-                        f"❌ Parent page '{parent_page_name}' not found.", style="red"
+                        f"❌ Parent page '{parent_page_name}' not found.",
+                        style="red",
                     )
                     raise typer.Exit(1)
                 elif len(pages) > 1:
@@ -1109,7 +1204,7 @@ def create_page(
         else:
             with console.status("Fetching pages..."):
                 all_pages = client.search_pages()
-            
+
             if not all_pages:
                 console.print("No pages found to select as a parent.", style="yellow")
                 # Ask if the user wants to create a top-level page
@@ -1118,7 +1213,7 @@ def create_page(
             else:
                 # Sort pages alphabetically by title before creating choices
                 all_pages.sort(key=lambda page: client._extract_page_title(page))
-                
+
                 page_choices = [
                     (client._extract_page_title(page), page["id"]) for page in all_pages
                 ]
@@ -1133,19 +1228,18 @@ def create_page(
                 if selected_title is None:
                     console.print("No parent page selected. Aborting.", style="yellow")
                     raise typer.Exit()
-                
+
                 # Find the id corresponding to the selected title
                 for title, pid in page_choices:
                     if title == selected_title:
                         parent_id = pid
                         break
 
-
         # Read and convert the file content
         with console.status("Converting file to Notion format..."):
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 md_content = f.read()
-            
+
             # Extract title from the first H1, or use the filename
             page_title = filepath.stem
             if md_content.strip().startswith("# "):
@@ -1158,7 +1252,9 @@ def create_page(
             children = parse_md(md_content)
 
         # Create the page
-        with console.status(f"Creating page in Notion...: {page_title}. Parent ID: {parent_id}"):
+        with console.status(
+            f"Creating page in Notion...: {page_title}. Parent ID: {parent_id}",
+        ):
             result = client.create_page_in_page(parent_id, page_title, children)
 
         entry_id = result.get("id", "")
@@ -1181,11 +1277,12 @@ def create_page(
 @page_app.command("link")
 def get_page_link(
     name: str = typer.Argument(..., help="Page name to get link for"),
-    copy: bool = typer.Option(
-        False, "--copy", "-c", help="Copy the link to clipboard"
-    ),
+    copy: bool = typer.Option(False, "--copy", "-c", help="Copy the link to clipboard"),
     public_only: bool = typer.Option(
-        False, "--public", "-p", help="Only show public link if available"
+        False,
+        "--public",
+        "-p",
+        help="Only show public link if available",
     ),
 ) -> None:
     """Get the link for a specific page."""
@@ -1205,29 +1302,30 @@ def get_page_link(
         console.print(f"📄 Page: {title}", style="bold cyan")
 
         if public_only:
-            if urls['public']:
+            if urls["public"]:
                 console.print(f"🔗 Public URL: {urls['public']}", style="green")
-                url_to_copy = urls['public']
+                url_to_copy = urls["public"]
             else:
                 console.print("❌ This page is not shared publicly.", style="red")
                 raise typer.Exit(1)
         else:
             console.print(f"🔗 Private URL: {urls['private']}", style="blue")
-            url_to_copy = urls['private']
-            
-            if urls['public']:
+            url_to_copy = urls["private"]
+
+            if urls["public"]:
                 console.print(f"🌐 Public URL: {urls['public']}", style="green")
 
         # Copy to clipboard if requested
         if copy:
             try:
                 import pyperclip
+
                 pyperclip.copy(url_to_copy)
                 console.print("✅ Link copied to clipboard!", style="green")
             except ImportError:
                 console.print(
-                    "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
-                    style="yellow"
+                    "⚠️ pyperclip not installed. Install with: pip install pyperclip",
+                    style="yellow",
                 )
             except Exception as e:
                 console.print(f"⚠️ Failed to copy to clipboard: {e}", style="yellow")
@@ -1242,6 +1340,7 @@ def get_page_link(
 
 # Shell completion commands
 
+
 def generate_completion_script(shell: str) -> str:
     """Generate completion script for the specified shell."""
     if shell == "bash":
@@ -1252,14 +1351,14 @@ _notion_completion() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    
+
     # Main commands
     if [[ ${COMP_CWORD} == 1 ]]; then
         opts="auth db view page completion version --help"
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
         return 0
     fi
-    
+
     # Subcommands
     case "${COMP_WORDS[1]}" in
         auth)
@@ -1281,7 +1380,7 @@ _notion_completion() {
             return 0
             ;;
     esac
-    
+
     COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
     return 0
 }
@@ -1294,11 +1393,11 @@ complete -F _notion_completion notion
 
 _notion() {
     local context state line
-    
+
     _arguments -C \\
         "1: :->cmds" \\
         "*: :->args"
-        
+
     case $state in
         cmds)
             _values "notion command" \\
@@ -1401,7 +1500,7 @@ complete -c notion -s h -l help -d "Show help"
 
 Register-ArgumentCompleter -CommandName notion -ScriptBlock {
     param($commandName, $wordToComplete, $cursorPosition)
-    
+
     $commands = @{
         'auth' = @('setup', 'test')
         'db' = @('list', 'show', 'create', 'edit', 'link', 'entry-link')
@@ -1410,9 +1509,9 @@ Register-ArgumentCompleter -CommandName notion -ScriptBlock {
         'completion' = @('install', 'show', 'uninstall')
         'version' = @()
     }
-    
+
     $arguments = $wordToComplete.Split(' ')
-    
+
     if ($arguments.Count -eq 1) {
         # Complete main commands
         $commands.Keys | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
@@ -1433,34 +1532,34 @@ Register-ArgumentCompleter -CommandName notion -ScriptBlock {
 
 @completion_app.command("install")
 def install_completion(
-    shell: str = typer.Argument(
-        ..., 
-        help="Shell type: bash, zsh, fish, or powershell"
-    ),
+    shell: str = typer.Argument(..., help="Shell type: bash, zsh, fish, or powershell"),
     show_completion: bool = typer.Option(
-        False, "--show", help="Show the completion script instead of installing"
+        False,
+        "--show",
+        help="Show the completion script instead of installing",
     ),
 ) -> None:
     """Install shell completion for notion."""
-    import os
-    from pathlib import Path
-    
+
     # Validate shell type
     valid_shells = ["bash", "zsh", "fish", "powershell"]
     if shell not in valid_shells:
         console.print(f"❌ Unsupported shell: {shell}", style="red")
         console.print(f"Supported shells: {', '.join(valid_shells)}", style="yellow")
         raise typer.Exit(1)
-    
+
     try:
         # Generate completion script manually for each shell
         completion_script = generate_completion_script(shell)
-        
+
         if show_completion:
-            console.print(f"# {shell.upper()} completion script for notion", style="bold cyan")
+            console.print(
+                f"# {shell.upper()} completion script for notion",
+                style="bold cyan",
+            )
             console.print(completion_script, style="dim")
             return
-        
+
         # Install completion based on shell type
         if shell == "bash":
             install_bash_completion(completion_script)
@@ -1470,7 +1569,7 @@ def install_completion(
             install_fish_completion(completion_script)
         elif shell == "powershell":
             install_powershell_completion(completion_script)
-            
+
     except Exception as e:
         console.print(f"❌ Failed to install completion: {e}", style="red")
         raise typer.Exit(1)
@@ -1478,25 +1577,27 @@ def install_completion(
 
 def install_bash_completion(completion_script: str) -> None:
     """Install bash completion."""
-    import os
     from pathlib import Path
-    
+
     # Try common bash completion directories
-    completion_dirs = [
+    [
         Path.home() / ".bash_completion.d",
         Path("/usr/local/etc/bash_completion.d"),
         Path("/etc/bash_completion.d"),
     ]
-    
+
     # Create user completion directory if it doesn't exist
     user_dir = Path.home() / ".bash_completion.d"
     user_dir.mkdir(exist_ok=True)
-    
+
     completion_file = user_dir / "notion"
     completion_file.write_text(completion_script)
-    
+
     console.print(f"✅ Bash completion installed to: {completion_file}", style="green")
-    console.print("\n📝 To enable completion, add this to your ~/.bashrc:", style="bold")
+    console.print(
+        "\n📝 To enable completion, add this to your ~/.bashrc:",
+        style="bold",
+    )
     console.print(f"source {completion_file}", style="cyan")
     console.print("\nOr restart your terminal.", style="dim")
 
@@ -1504,7 +1605,7 @@ def install_bash_completion(completion_script: str) -> None:
 def install_zsh_completion(completion_script: str) -> None:
     """Install zsh completion."""
     from pathlib import Path
-    
+
     # Check if using oh-my-zsh
     oh_my_zsh_dir = Path.home() / ".oh-my-zsh"
     if oh_my_zsh_dir.exists():
@@ -1516,44 +1617,55 @@ def install_zsh_completion(completion_script: str) -> None:
         completion_dir = Path.home() / ".zsh" / "completions"
         completion_dir.mkdir(parents=True, exist_ok=True)
         completion_file = completion_dir / "_notion"
-    
+
     completion_file.write_text(completion_script)
-    
+
     console.print(f"✅ Zsh completion installed to: {completion_file}", style="green")
-    
+
     if oh_my_zsh_dir.exists():
-        console.print("\n📝 To enable completion, add 'notion' to your plugins in ~/.zshrc:", style="bold")
+        console.print(
+            "\n📝 To enable completion, add 'notion' to your plugins in ~/.zshrc:",
+            style="bold",
+        )
         console.print("plugins=(... notion)", style="cyan")
     else:
-        console.print("\n📝 To enable completion, add this to your ~/.zshrc:", style="bold")
+        console.print(
+            "\n📝 To enable completion, add this to your ~/.zshrc:",
+            style="bold",
+        )
         console.print(f"fpath=({completion_dir} $fpath)", style="cyan")
         console.print("autoload -U compinit && compinit", style="cyan")
-    
+
     console.print("\nThen restart your terminal or run: source ~/.zshrc", style="dim")
 
 
 def install_fish_completion(completion_script: str) -> None:
     """Install fish completion."""
     from pathlib import Path
-    
+
     # Fish completion directory
     completion_dir = Path.home() / ".config" / "fish" / "completions"
     completion_dir.mkdir(parents=True, exist_ok=True)
-    
+
     completion_file = completion_dir / "notion.fish"
     completion_file.write_text(completion_script)
-    
+
     console.print(f"✅ Fish completion installed to: {completion_file}", style="green")
-    console.print("\n📝 Completion should work immediately in new fish sessions.", style="bold")
+    console.print(
+        "\n📝 Completion should work immediately in new fish sessions.",
+        style="bold",
+    )
     console.print("Or run: fish_update_completions", style="cyan")
 
 
 def install_powershell_completion(completion_script: str) -> None:
     """Install PowerShell completion."""
-    from pathlib import Path
-    
-    console.print(f"✅ PowerShell completion script generated:", style="green")
-    console.print("\n📝 To enable completion, add this to your PowerShell profile:", style="bold")
+
+    console.print("✅ PowerShell completion script generated:", style="green")
+    console.print(
+        "\n📝 To enable completion, add this to your PowerShell profile:",
+        style="bold",
+    )
     console.print("# Add notion completion", style="dim")
     console.print(completion_script, style="cyan")
     console.print("\nTo find your profile location, run: $PROFILE", style="dim")
@@ -1561,10 +1673,7 @@ def install_powershell_completion(completion_script: str) -> None:
 
 @completion_app.command("show")
 def show_completion(
-    shell: str = typer.Argument(
-        ..., 
-        help="Shell type: bash, zsh, fish, or powershell"
-    ),
+    shell: str = typer.Argument(..., help="Shell type: bash, zsh, fish, or powershell"),
 ) -> None:
     """Show the completion script for a specific shell."""
     install_completion(shell, show_completion=True)
@@ -1572,22 +1681,21 @@ def show_completion(
 
 @completion_app.command("uninstall")
 def uninstall_completion(
-    shell: str = typer.Argument(
-        ..., 
-        help="Shell type: bash, zsh, fish, or powershell"
-    ),
+    shell: str = typer.Argument(..., help="Shell type: bash, zsh, fish, or powershell"),
 ) -> None:
     """Uninstall shell completion for notion."""
     from pathlib import Path
-    
+
     try:
         if shell == "bash":
             completion_file = Path.home() / ".bash_completion.d" / "notion"
         elif shell == "zsh":
             # Try both oh-my-zsh and standard locations
-            oh_my_zsh_file = Path.home() / ".oh-my-zsh" / "custom" / "plugins" / "notion" / "_notion"
+            oh_my_zsh_file = (
+                Path.home() / ".oh-my-zsh" / "custom" / "plugins" / "notion" / "_notion"
+            )
             standard_file = Path.home() / ".zsh" / "completions" / "_notion"
-            
+
             if oh_my_zsh_file.exists():
                 completion_file = oh_my_zsh_file
             else:
@@ -1595,20 +1703,32 @@ def uninstall_completion(
         elif shell == "fish":
             completion_file = Path.home() / ".config" / "fish" / "completions" / "notion.fish"
         elif shell == "powershell":
-            console.print("⚠️ PowerShell completion must be manually removed from your profile.", style="yellow")
-            console.print("Remove the notion completion lines from: $PROFILE", style="dim")
+            console.print(
+                "⚠️ PowerShell completion must be manually removed from your profile.",
+                style="yellow",
+            )
+            console.print(
+                "Remove the notion completion lines from: $PROFILE",
+                style="dim",
+            )
             return
         else:
             console.print(f"❌ Unsupported shell: {shell}", style="red")
             raise typer.Exit(1)
-        
+
         if completion_file.exists():
             completion_file.unlink()
-            console.print(f"✅ {shell.capitalize()} completion removed from: {completion_file}", style="green")
+            console.print(
+                f"✅ {shell.capitalize()} completion removed from: {completion_file}",
+                style="green",
+            )
             console.print("🔄 Restart your terminal to apply changes.", style="dim")
         else:
-            console.print(f"⚠️ {shell.capitalize()} completion not found at: {completion_file}", style="yellow")
-            
+            console.print(
+                f"⚠️ {shell.capitalize()} completion not found at: {completion_file}",
+                style="yellow",
+            )
+
     except Exception as e:
         console.print(f"❌ Failed to uninstall completion: {e}", style="red")
         raise typer.Exit(1)

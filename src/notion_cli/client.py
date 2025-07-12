@@ -20,7 +20,7 @@ class NotionClientWrapper:
         if not config.integration_token:
             raise ValueError(
                 "No Notion integration token found. "
-                "Run 'notion auth setup --token <your-token>' first."
+                "Run 'notion auth setup --token <your-token>' first.",
             )
 
         self.client = Client(auth=config.integration_token)
@@ -38,7 +38,7 @@ class NotionClientWrapper:
         """List all accessible databases."""
         try:
             response = self.client.search(
-                filter={"property": "object", "value": "database"}
+                filter={"property": "object", "value": "database"},
             )
             return response.get("results", [])
         except APIResponseError as e:
@@ -93,25 +93,31 @@ class NotionClientWrapper:
             raise Exception(f"Failed to query database {database_id}: {e}")
 
     def create_page(
-        self, database_id: str, properties: dict[str, Any]
+        self,
+        database_id: str,
+        properties: dict[str, Any],
     ) -> dict[str, Any]:
         """Create a new page in a database."""
         try:
             return self.client.pages.create(
-                parent={"database_id": database_id}, properties=properties
+                parent={"database_id": database_id},
+                properties=properties,
             )
         except APIResponseError as e:
             raise Exception(f"Failed to create page in database {database_id}: {e}")
 
     def create_page_in_page(
-        self, parent_page_id: str | None, title: str, children: list[dict[str, Any]]
+        self,
+        parent_page_id: str | None,
+        title: str,
+        children: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Create a new page within another page."""
         try:
             parent = {}
             if parent_page_id:
                 parent = {"page_id": parent_page_id}
-            
+
             return self.client.pages.create(
                 parent=parent,
                 properties={"title": {"title": [{"text": {"content": title}}]}},
@@ -138,7 +144,7 @@ class NotionClientWrapper:
         self,
         database_id: str,
         limit: int | None = None,
-        filter_conditions: dict[str, Any] | None = None
+        filter_conditions: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Get entries from a database with pagination support."""
         try:
@@ -404,21 +410,24 @@ class NotionClientWrapper:
 
     def upload_file(self, file_path: str) -> dict[str, Any]:
         """Upload a file to Notion and return the file object."""
-        import os
         import mimetypes
+        import os
+
         import requests
-        
+
         if not os.path.exists(file_path):
             raise ValueError(f"File not found: {file_path}")
-        
+
         file_name = os.path.basename(file_path)
         file_size = os.path.getsize(file_path)
-        
+
         # Check file size limit (20MB for single-part upload)
         max_size = 20 * 1024 * 1024  # 20MB in bytes
         if file_size > max_size:
-            raise ValueError(f"File size ({file_size} bytes) exceeds 20MB limit for single-part upload")
-        
+            raise ValueError(
+                f"File size ({file_size} bytes) exceeds 20MB limit for single-part upload",
+            )
+
         try:
             # Step 1: Create file upload object
             create_response = requests.post(
@@ -427,43 +436,41 @@ class NotionClientWrapper:
                 headers={
                     "Authorization": f"Bearer {self.config.integration_token}",
                     "Content-Type": "application/json",
-                    "Notion-Version": "2022-06-28"
-                }
+                    "Notion-Version": "2022-06-28",
+                },
             )
             create_response.raise_for_status()
             upload_data = create_response.json()
-            
+
             file_upload_id = upload_data["id"]
-            
+
             # Step 2: Upload file contents
             with open(file_path, "rb") as f:
                 mime_type, _ = mimetypes.guess_type(file_path)
                 if not mime_type:
                     mime_type = "application/octet-stream"
-                
+
                 files = {"file": (file_name, f, mime_type)}
                 upload_response = requests.post(
                     f"https://api.notion.com/v1/file_uploads/{file_upload_id}/send",
                     headers={
                         "Authorization": f"Bearer {self.config.integration_token}",
-                        "Notion-Version": "2022-06-28"
+                        "Notion-Version": "2022-06-28",
                     },
-                    files=files
+                    files=files,
                 )
                 upload_response.raise_for_status()
-            
+
             # Return file object for use in properties
             # Use file_upload type with the upload ID
             return {
                 "name": file_name,
-                "type": "file_upload", 
-                "file_upload": {
-                    "id": file_upload_id
-                }
+                "type": "file_upload",
+                "file_upload": {"id": file_upload_id},
             }
-            
+
         except requests.exceptions.RequestException as e:
-            if hasattr(e.response, 'json'):
+            if hasattr(e.response, "json"):
                 error_details = e.response.json()
                 raise ValueError(f"File upload failed: {error_details}")
             else:
@@ -472,14 +479,14 @@ class NotionClientWrapper:
             raise ValueError(f"Unexpected error during file upload: {e}")
 
     def prepare_file_properties(
-        self, 
-        files: list[str], 
-        file_properties: list[str]
+        self,
+        files: list[str],
+        file_properties: list[str],
     ) -> dict[str, list[dict[str, Any]]]:
         """Prepare file objects for Notion properties."""
         if not files:
             return {}
-        
+
         file_objects = []
         for file_path in files:
             try:
@@ -489,27 +496,25 @@ class NotionClientWrapper:
             except Exception as e:
                 print(f"❌ Failed to upload {os.path.basename(file_path)}: {e}")
                 continue
-        
+
         if not file_objects:
             return {}
-        
+
         # Map files to file properties
         result = {}
         for prop_name in file_properties:
             result[prop_name] = file_objects
-        
+
         return result
 
     def search_pages(self, query: str = "") -> list[dict[str, Any]]:
         """Search for pages in the workspace."""
         try:
-            search_params = {
-                "filter": {"property": "object", "value": "page"}
-            }
-            
+            search_params = {"filter": {"property": "object", "value": "page"}}
+
             if query:
                 search_params["query"] = query
-            
+
             response = self.client.search(**search_params)
             return response.get("results", [])
         except APIResponseError as e:
@@ -518,34 +523,37 @@ class NotionClientWrapper:
     def get_page_by_name(self, name: str, fuzzy: bool = True) -> list[dict[str, Any]]:
         """Get pages by name with optional fuzzy matching."""
         all_pages = self.search_pages()
-        
+
         if not all_pages:
             return []
-        
+
         matching_pages = []
         name_lower = name.lower()
-        
+
         for page in all_pages:
             page_title = self._extract_page_title(page)
             page_title_lower = page_title.lower()
-            
+
             if fuzzy:
                 # Fuzzy matching - check if query is contained in title
                 if name_lower in page_title_lower:
-                    matching_pages.append({
-                        **page,
-                        "_title": page_title,
-                        "_match_score": self._calculate_match_score(name_lower, page_title_lower)
-                    })
+                    matching_pages.append(
+                        {
+                            **page,
+                            "_title": page_title,
+                            "_match_score": self._calculate_match_score(
+                                name_lower,
+                                page_title_lower,
+                            ),
+                        },
+                    )
             else:
                 # Exact matching
                 if page_title_lower == name_lower:
-                    matching_pages.append({
-                        **page,
-                        "_title": page_title,
-                        "_match_score": 1.0
-                    })
-        
+                    matching_pages.append(
+                        {**page, "_title": page_title, "_match_score": 1.0},
+                    )
+
         # Sort by match score (higher is better)
         matching_pages.sort(key=lambda x: x["_match_score"], reverse=True)
         return matching_pages
@@ -553,21 +561,21 @@ class NotionClientWrapper:
     def _extract_page_title(self, page: dict[str, Any]) -> str:
         """Extract title from a page object."""
         properties = page.get("properties", {})
-        
+
         # Look for title property
-        for prop_name, prop_data in properties.items():
+        for _prop_name, prop_data in properties.items():
             if prop_data.get("type") == "title":
                 title_content = prop_data.get("title", [])
                 if title_content:
                     return title_content[0].get("plain_text", "Untitled")
-        
+
         # Fallback to page title in root
         if "title" in page and page["title"]:
             if isinstance(page["title"], list) and page["title"]:
                 return page["title"][0].get("plain_text", "Untitled")
             elif isinstance(page["title"], str):
                 return page["title"]
-        
+
         return "Untitled"
 
     def _calculate_match_score(self, query: str, title: str) -> float:
@@ -584,70 +592,70 @@ class NotionClientWrapper:
 
     def get_page_urls(self, page: dict[str, Any]) -> dict[str, str]:
         """Get both private and public URLs for a page."""
-        page_id = page.get("id", "")
+        page.get("id", "")
         notion_url = page.get("url", "")
-        
-        urls = {
-            "private": notion_url,
-            "public": None
-        }
-        
+
+        urls = {"private": notion_url, "public": None}
+
         # Check if page has public access
         # Note: Notion API doesn't directly expose public URL info
         # We can only provide the private URL and let users know about public sharing
         public_url = page.get("public_url")  # This field may not exist in API
         if public_url:
             urls["public"] = public_url
-        
+
         return urls
 
     def get_database_entry_by_name(
-        self, 
-        database_name: str, 
-        entry_name: str, 
-        fuzzy: bool = True
+        self,
+        database_name: str,
+        entry_name: str,
+        fuzzy: bool = True,
     ) -> list[dict[str, Any]]:
         """Get database entries by searching for a specific name/title."""
         database = self.get_database_by_name(database_name)
         if not database:
             raise ValueError(f"Database '{database_name}' not found")
-        
+
         database_id = database.get("id", "")
-        properties = database.get("properties", {})
-        
+        database.get("properties", {})
+
         # Get all entries
         all_entries = self.get_database_entries(database_id)
-        
+
         if not all_entries:
             return []
-        
+
         matching_entries = []
         entry_name_lower = entry_name.lower()
-        
+
         for entry in all_entries:
             entry_properties = entry.get("properties", {})
-            
+
             # Look for title-like properties
             entry_title = self._extract_entry_title(entry_properties)
             entry_title_lower = entry_title.lower()
-            
+
             if fuzzy:
                 # Fuzzy matching - check if query is contained in title
                 if entry_name_lower in entry_title_lower:
-                    matching_entries.append({
-                        **entry,
-                        "_title": entry_title,
-                        "_match_score": self._calculate_match_score(entry_name_lower, entry_title_lower)
-                    })
+                    matching_entries.append(
+                        {
+                            **entry,
+                            "_title": entry_title,
+                            "_match_score": self._calculate_match_score(
+                                entry_name_lower,
+                                entry_title_lower,
+                            ),
+                        },
+                    )
             else:
                 # Exact matching
                 if entry_title_lower == entry_name_lower:
-                    matching_entries.append({
-                        **entry,
-                        "_title": entry_title,
-                        "_match_score": 1.0
-                    })
-        
+                    matching_entries.append(
+                        {**entry, "_title": entry_title, "_match_score": 1.0},
+                    )
+
         # Sort by match score (higher is better)
         matching_entries.sort(key=lambda x: x["_match_score"], reverse=True)
         return matching_entries
@@ -655,12 +663,12 @@ class NotionClientWrapper:
     def _extract_entry_title(self, entry_properties: dict[str, Any]) -> str:
         """Extract title from database entry properties."""
         # Look for title property first
-        for prop_name, prop_data in entry_properties.items():
+        for _prop_name, prop_data in entry_properties.items():
             if prop_data.get("type") == "title":
                 title_content = prop_data.get("title", [])
                 if title_content:
                     return title_content[0].get("plain_text", "Untitled")
-        
+
         # Look for common name fields
         name_fields = ["Name", "Title", "Task", "Subject", "Item"]
         for field_name in name_fields:
@@ -669,31 +677,28 @@ class NotionClientWrapper:
                 value = self.extract_property_value(prop_data)
                 if value and value.strip():
                     return value.strip()
-        
+
         # Fallback to first text-like property
-        for prop_name, prop_data in entry_properties.items():
+        for _prop_name, prop_data in entry_properties.items():
             prop_type = prop_data.get("type", "")
             if prop_type in ["rich_text", "title"]:
                 value = self.extract_property_value(prop_data)
                 if value and value.strip():
                     return value.strip()
-        
+
         return "Untitled"
 
     def get_entry_urls(self, entry: dict[str, Any]) -> dict[str, str]:
         """Get URLs for a database entry."""
-        entry_id = entry.get("id", "")
+        entry.get("id", "")
         entry_url = entry.get("url", "")
-        
-        urls = {
-            "private": entry_url,
-            "public": None
-        }
-        
+
+        urls = {"private": entry_url, "public": None}
+
         # Check if entry has public access
         # Note: Database entries inherit public access from the database
         public_url = entry.get("public_url")  # This field may not exist in API
         if public_url:
             urls["public"] = public_url
-        
+
         return urls

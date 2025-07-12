@@ -32,7 +32,8 @@ class FilterParser:
         self.text = ""
 
     def parse(
-        self, filter_text: str
+        self,
+        filter_text: str,
     ) -> FilterCondition | LogicalGroup | list[FilterCondition]:
         """Parse a filter expression into structured conditions."""
         self.text = filter_text.strip()
@@ -147,7 +148,7 @@ class FilterParser:
         # Check if the column name is quoted
         if self.pos < len(self.text) and self.text[self.pos] in "\"'":
             return self._read_quoted_string()
-        
+
         start = self.pos
 
         while self.pos < len(self.text):
@@ -163,7 +164,7 @@ class FilterParser:
 
             self.pos += 1
 
-        column = self.text[start:self.pos].strip()
+        column = self.text[start : self.pos].strip()
         if not column:
             raise ValueError("Empty column name")
 
@@ -172,7 +173,7 @@ class FilterParser:
     def _read_operator(self) -> str:
         """Read operator at current position."""
         for op in self.OPERATORS:
-            if self.text[self.pos:self.pos + len(op)] == op:
+            if self.text[self.pos : self.pos + len(op)] == op:
                 self.pos += len(op)
                 return op
         return ""
@@ -206,7 +207,7 @@ class FilterParser:
 
             self.pos += 1
 
-        value = self.text[start:self.pos].strip()
+        value = self.text[start : self.pos].strip()
         if not value:
             raise ValueError("Empty value")
 
@@ -221,7 +222,7 @@ class FilterParser:
 
         while self.pos < len(self.text):
             if self.text[self.pos] == quote_char:
-                value = self.text[start:self.pos]
+                value = self.text[start : self.pos]
                 self.pos += 1  # Skip closing quote
                 return value
             elif self.text[self.pos] == "\\" and self.pos + 1 < len(self.text):
@@ -242,7 +243,7 @@ class FilterParser:
                 break
             self.pos += 1
 
-        return self.text[start:self.pos]
+        return self.text[start : self.pos]
 
     def _peek_function(self) -> bool:
         """Check if current position starts a function."""
@@ -250,9 +251,11 @@ class FilterParser:
         try:
             func_name = self._read_function_name()
             self._skip_whitespace()
-            is_function = (func_name.upper() in ["AND", "OR", "NOT"] and
-                          self.pos < len(self.text) and
-                          self.text[self.pos] == "(")
+            is_function = (
+                func_name.upper() in ["AND", "OR", "NOT"]
+                and self.pos < len(self.text)
+                and self.text[self.pos] == "("
+            )
             return is_function
         finally:
             self.pos = saved_pos
@@ -260,7 +263,7 @@ class FilterParser:
     def _check_operator_at_pos(self) -> bool:
         """Check if an operator starts at current position."""
         for op in self.OPERATORS:
-            if self.text[self.pos:self.pos + len(op)] == op:
+            if self.text[self.pos : self.pos + len(op)] == op:
                 # Additional check: make sure the operator is not part of a word
                 # by checking that it's followed by whitespace or a value character
                 end_pos = self.pos + len(op)
@@ -289,9 +292,11 @@ class FilterParser:
 class NotionFilterConverter:
     """Converts parsed filter conditions to Notion API format."""
 
-    def convert(self,
-                conditions: FilterCondition | LogicalGroup | list[FilterCondition],
-                properties: dict[str, Any]) -> dict[str, Any]:
+    def convert(
+        self,
+        conditions: FilterCondition | LogicalGroup | list[FilterCondition],
+        properties: dict[str, Any],
+    ) -> dict[str, Any]:
         """Convert parsed conditions to Notion API filter format."""
         if isinstance(conditions, list):
             if not conditions:
@@ -300,9 +305,7 @@ class NotionFilterConverter:
                 return self._convert_single(conditions[0], properties)
             else:
                 # Multiple conditions = AND
-                converted = [
-                    self._convert_single(cond, properties) for cond in conditions
-                ]
+                converted = [self._convert_single(cond, properties) for cond in conditions]
                 return {"and": converted}
         elif isinstance(conditions, FilterCondition):
             return self._convert_single(conditions, properties)
@@ -340,11 +343,16 @@ class NotionFilterConverter:
 
         # Convert based on property type and operator
         return self._build_notion_condition(
-            prop_name, prop_type, condition.operator, condition.value
+            prop_name,
+            prop_type,
+            condition.operator,
+            condition.value,
         )
 
     def _convert_group(
-        self, group: LogicalGroup, properties: dict[str, Any]
+        self,
+        group: LogicalGroup,
+        properties: dict[str, Any],
     ) -> dict[str, Any]:
         """Convert a logical group to Notion format."""
         converted_conditions = []
@@ -404,7 +412,10 @@ class NotionFilterConverter:
             return self._build_text_condition(base, operator, value)
 
     def _build_title_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for title properties."""
         if operator == "=":
@@ -420,7 +431,10 @@ class NotionFilterConverter:
             raise ValueError(msg)
 
     def _build_text_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for text properties."""
         if operator == "=":
@@ -436,7 +450,10 @@ class NotionFilterConverter:
             raise ValueError(msg)
 
     def _build_number_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for number properties."""
         try:
@@ -461,7 +478,10 @@ class NotionFilterConverter:
             raise ValueError(msg)
 
     def _build_select_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for select properties."""
         if operator == "=" or operator == "~":
@@ -495,7 +515,10 @@ class NotionFilterConverter:
             raise ValueError(msg)
 
     def _build_multiselect_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for multi-select properties."""
         if operator == "=" or operator == "~":
@@ -529,7 +552,10 @@ class NotionFilterConverter:
             raise ValueError(msg)
 
     def _build_date_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for date properties."""
         # Notion expects ISO date format
@@ -552,7 +578,10 @@ class NotionFilterConverter:
             raise ValueError(msg)
 
     def _build_checkbox_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for checkbox properties."""
         bool_value = value.lower() in ("true", "yes", "1", "✓", "checked")
@@ -566,7 +595,10 @@ class NotionFilterConverter:
             raise ValueError(msg)
 
     def _build_status_condition(
-        self, base: dict[str, Any], operator: str, value: str
+        self,
+        base: dict[str, Any],
+        operator: str,
+        value: str,
     ) -> dict[str, Any]:
         """Build condition for status properties."""
         if operator == "=" or operator == "~":
