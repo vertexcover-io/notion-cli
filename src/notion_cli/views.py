@@ -27,7 +27,7 @@ class ViewsManager:
         if config_path:
             self.views_path = config_path
         else:
-            config_dir = Path(user_config_dir("notion-cli", "notion-cli"))
+            config_dir = Path(user_config_dir("notion", "notion"))
             self.views_path = config_dir / "views.json"
 
         # Ensure the directory exists

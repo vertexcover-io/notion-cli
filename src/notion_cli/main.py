@@ -20,11 +20,13 @@ auth_app = typer.Typer(help="Authentication commands")
 db_app = typer.Typer(help="Database commands")
 view_app = typer.Typer(help="View management commands")
 page_app = typer.Typer(help="Page management commands")
+completion_app = typer.Typer(help="Shell completion commands")
 
 app.add_typer(auth_app, name="auth")
 app.add_typer(db_app, name="db")
 app.add_typer(view_app, name="view")
 app.add_typer(page_app, name="page")
+app.add_typer(completion_app, name="completion")
 
 console = Console()
 
@@ -142,7 +144,7 @@ def show_database(
         if not database:
             console.print(f"❌ Database '{name}' not found.", style="red")
             console.print(
-                "Use 'notion-cli db list' to see available databases.", style="yellow"
+                "Use 'notion db list' to see available databases.", style="yellow"
             )
             raise typer.Exit(1)
 
@@ -375,7 +377,7 @@ def show_view(
 
         if not view:
             console.print(f"❌ View '{view_name}' not found.", style="red")
-            msg = "Use 'notion-cli view list' to see available views."
+            msg = "Use 'notion view list' to see available views."
             console.print(msg, style="yellow")
             raise typer.Exit(1)
 
@@ -445,7 +447,7 @@ def update_view(
         if not view:
             console.print(f"❌ View '{view_name}' not found.", style="red")
             console.print(
-                "Use 'notion-cli view list' to see available views.", style="yellow"
+                "Use 'notion view list' to see available views.", style="yellow"
             )
             raise typer.Exit(1)
 
@@ -539,7 +541,7 @@ def create_entry(
         if not database:
             console.print(f"❌ Database '{database_name}' not found.", style="red")
             console.print(
-                "Use 'notion-cli db list' to see available databases.",
+                "Use 'notion db list' to see available databases.",
                 style="yellow"
             )
             raise typer.Exit(1)
@@ -653,7 +655,7 @@ def edit_entries(
         if not database:
             console.print(f"❌ Database '{database_name}' not found.", style="red")
             console.print(
-                "Use 'notion-cli db list' to see available databases.",
+                "Use 'notion db list' to see available databases.",
                 style="yellow"
             )
             raise typer.Exit(1)
@@ -809,6 +811,168 @@ def edit_entries(
         raise typer.Exit(1)
 
 
+@db_app.command("link")
+def get_database_link(
+    database_name: str = typer.Argument(..., help="Database name to get link for"),
+    copy: bool = typer.Option(
+        False, "--copy", "-c", help="Copy the link to clipboard"
+    ),
+) -> None:
+    """Get the link for a specific database."""
+    try:
+        client = NotionClientWrapper()
+        database = client.get_database_by_name(database_name)
+
+        if not database:
+            console.print(f"❌ Database '{database_name}' not found.", style="red")
+            console.print(
+                "Use 'notion db list' to see available databases.", style="yellow"
+            )
+            raise typer.Exit(1)
+
+        # Extract database title
+        title = "Untitled"
+        if "title" in database and database["title"]:
+            if isinstance(database["title"], list) and database["title"]:
+                title = database["title"][0].get("plain_text", "Untitled")
+            elif isinstance(database["title"], str):
+                title = database["title"]
+
+        # Get database URL
+        db_url = database.get("url", "")
+        db_id = database.get("id", "")
+
+        console.print(f"🗃️ Database: {title}", style="bold cyan")
+        console.print(f"🔗 URL: {db_url}", style="blue")
+        console.print(f"📊 Database ID: {db_id}", style="dim")
+
+        # Copy to clipboard if requested
+        if copy:
+            try:
+                import pyperclip
+                pyperclip.copy(db_url)
+                console.print("✅ Link copied to clipboard!", style="green")
+            except ImportError:
+                console.print(
+                    "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
+                    style="yellow"
+                )
+            except Exception as e:
+                console.print(f"⚠️ Failed to copy to clipboard: {e}", style="yellow")
+
+    except ValueError as e:
+        console.print(f"❌ {e}", style="red")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@db_app.command("entry-link")
+def get_entry_link(
+    database_name: str = typer.Argument(..., help="Database name"),
+    entry_name: str = typer.Argument(..., help="Entry name to get link for"),
+    exact: bool = typer.Option(
+        False, "--exact", "-e", help="Use exact matching instead of fuzzy search"
+    ),
+    copy: bool = typer.Option(
+        False, "--copy", "-c", help="Copy the link to clipboard"
+    ),
+    limit: int = typer.Option(
+        5, "--limit", "-l", help="Maximum number of results to show"
+    ),
+) -> None:
+    """Get the link for a specific database entry."""
+    try:
+        client = NotionClientWrapper()
+        entries = client.get_database_entry_by_name(database_name, entry_name, fuzzy=not exact)
+
+        if not entries:
+            console.print(f"❌ No entries found matching '{entry_name}' in database '{database_name}'.", style="red")
+            console.print(f"Use 'notion db show \"{database_name}\"' to see all entries.", style="yellow")
+            raise typer.Exit(1)
+
+        # If multiple entries found, show them for selection
+        if len(entries) > 1:
+            # Limit results
+            if len(entries) > limit:
+                entries = entries[:limit]
+                console.print(f"📊 Showing top {limit} results (found {len(entries)} total)")
+            else:
+                console.print(f"📊 Found {len(entries)} entry(s) matching '{entry_name}'")
+
+            for i, entry in enumerate(entries, 1):
+                title = entry.get("_title", "Untitled")
+                match_score = entry.get("_match_score", 0)
+                entry_id = entry.get("id", "")
+                
+                # Get URLs
+                urls = client.get_entry_urls(entry)
+                
+                console.print(f"\n{i}. {title}", style="bold cyan")
+                console.print(f"   Match Score: {match_score:.2f}", style="dim")
+                console.print(f"   Entry ID: {entry_id}", style="dim")
+                console.print(f"   Private URL: {urls['private']}", style="blue")
+                
+                if urls['public']:
+                    console.print(f"   Public URL: {urls['public']}", style="green")
+                else:
+                    console.print("   Public URL: Not shared publicly", style="yellow")
+
+            # Ask user to select one if copy is requested
+            if copy and len(entries) > 1:
+                try:
+                    choice = typer.prompt(f"\nWhich entry would you like to copy? (1-{len(entries)})", type=int)
+                    if 1 <= choice <= len(entries):
+                        entry = entries[choice - 1]
+                        urls = client.get_entry_urls(entry)
+                        
+                        import pyperclip
+                        pyperclip.copy(urls['private'])
+                        console.print("✅ Link copied to clipboard!", style="green")
+                    else:
+                        console.print("❌ Invalid choice.", style="red")
+                except (typer.Abort, ValueError):
+                    console.print("❌ Copy cancelled.", style="yellow")
+                except ImportError:
+                    console.print(
+                        "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
+                        style="yellow"
+                    )
+        else:
+            # Single entry - show details and copy if requested
+            entry = entries[0]
+            title = entry.get("_title", "Untitled")
+            urls = client.get_entry_urls(entry)
+
+            console.print(f"📊 Entry: {title}", style="bold cyan")
+            console.print(f"🔗 Private URL: {urls['private']}", style="blue")
+            
+            if urls['public']:
+                console.print(f"🌐 Public URL: {urls['public']}", style="green")
+
+            # Copy to clipboard if requested
+            if copy:
+                try:
+                    import pyperclip
+                    pyperclip.copy(urls['private'])
+                    console.print("✅ Link copied to clipboard!", style="green")
+                except ImportError:
+                    console.print(
+                        "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
+                        style="yellow"
+                    )
+                except Exception as e:
+                    console.print(f"⚠️ Failed to copy to clipboard: {e}", style="yellow")
+
+    except ValueError as e:
+        console.print(f"❌ {e}", style="red")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        raise typer.Exit(1)
+
+
 # Page management commands
 
 @page_app.command("list")
@@ -861,7 +1025,7 @@ def find_page(
 
         if not pages:
             console.print(f"❌ No pages found matching '{name}'.", style="red")
-            console.print("Use 'notion-cli page list' to see all pages.", style="yellow")
+            console.print("Use 'notion page list' to see all pages.", style="yellow")
             raise typer.Exit(1)
 
         # Limit results
@@ -959,12 +1123,386 @@ def get_page_link(
         raise typer.Exit(1)
 
 
+# Shell completion commands
+
+def generate_completion_script(shell: str) -> str:
+    """Generate completion script for the specified shell."""
+    if shell == "bash":
+        return """
+# Bash completion for notion
+_notion_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Main commands
+    if [[ ${COMP_CWORD} == 1 ]]; then
+        opts="auth db view page completion version --help"
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+    
+    # Subcommands
+    case "${COMP_WORDS[1]}" in
+        auth)
+            opts="setup test"
+            ;;
+        db)
+            opts="list show create edit link entry-link"
+            ;;
+        view)
+            opts="list show update delete"
+            ;;
+        page)
+            opts="list find link"
+            ;;
+        completion)
+            opts="install show uninstall"
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+    
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+
+complete -F _notion_completion notion
+"""
+    elif shell == "zsh":
+        return """
+#compdef notion
+
+_notion() {
+    local context state line
+    
+    _arguments -C \\
+        "1: :->cmds" \\
+        "*: :->args"
+        
+    case $state in
+        cmds)
+            _values "notion command" \\
+                "auth[Authentication commands]" \\
+                "db[Database commands]" \\
+                "view[View management commands]" \\
+                "page[Page management commands]" \\
+                "completion[Shell completion commands]" \\
+                "version[Show version]"
+            ;;
+        args)
+            case $line[1] in
+                auth)
+                    _values "auth command" \\
+                        "setup[Set up authentication]" \\
+                        "test[Test authentication]"
+                    ;;
+                db)
+                    _values "db command" \\
+                        "list[List databases]" \\
+                        "show[Show database entries]" \\
+                        "create[Create new entry]" \\
+                        "edit[Edit entries]" \\
+                        "link[Get database link]" \\
+                        "entry-link[Get entry link]"
+                    ;;
+                view)
+                    _values "view command" \\
+                        "list[List saved views]" \\
+                        "show[Show saved view]" \\
+                        "update[Update saved view]" \\
+                        "delete[Delete saved view]"
+                    ;;
+                page)
+                    _values "page command" \\
+                        "list[List pages]" \\
+                        "find[Find pages]" \\
+                        "link[Get page link]"
+                    ;;
+                completion)
+                    _values "completion command" \\
+                        "install[Install completion]" \\
+                        "show[Show completion script]" \\
+                        "uninstall[Uninstall completion]"
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_notion "$@"
+"""
+    elif shell == "fish":
+        return """
+# Fish completion for notion
+
+# Main commands
+complete -c notion -f -n "__fish_use_subcommand" -a "auth" -d "Authentication commands"
+complete -c notion -f -n "__fish_use_subcommand" -a "db" -d "Database commands"
+complete -c notion -f -n "__fish_use_subcommand" -a "view" -d "View management commands"
+complete -c notion -f -n "__fish_use_subcommand" -a "page" -d "Page management commands"
+complete -c notion -f -n "__fish_use_subcommand" -a "completion" -d "Shell completion commands"
+complete -c notion -f -n "__fish_use_subcommand" -a "version" -d "Show version"
+
+# Auth subcommands
+complete -c notion -f -n "__fish_seen_subcommand_from auth" -a "setup" -d "Set up authentication"
+complete -c notion -f -n "__fish_seen_subcommand_from auth" -a "test" -d "Test authentication"
+
+# Database subcommands
+complete -c notion -f -n "__fish_seen_subcommand_from db" -a "list" -d "List databases"
+complete -c notion -f -n "__fish_seen_subcommand_from db" -a "show" -d "Show database entries"
+complete -c notion -f -n "__fish_seen_subcommand_from db" -a "create" -d "Create new entry"
+complete -c notion -f -n "__fish_seen_subcommand_from db" -a "edit" -d "Edit entries"
+complete -c notion -f -n "__fish_seen_subcommand_from db" -a "link" -d "Get database link"
+complete -c notion -f -n "__fish_seen_subcommand_from db" -a "entry-link" -d "Get entry link"
+
+# View subcommands
+complete -c notion -f -n "__fish_seen_subcommand_from view" -a "list" -d "List saved views"
+complete -c notion -f -n "__fish_seen_subcommand_from view" -a "show" -d "Show saved view"
+complete -c notion -f -n "__fish_seen_subcommand_from view" -a "update" -d "Update saved view"
+complete -c notion -f -n "__fish_seen_subcommand_from view" -a "delete" -d "Delete saved view"
+
+# Page subcommands
+complete -c notion -f -n "__fish_seen_subcommand_from page" -a "list" -d "List pages"
+complete -c notion -f -n "__fish_seen_subcommand_from page" -a "find" -d "Find pages"
+complete -c notion -f -n "__fish_seen_subcommand_from page" -a "link" -d "Get page link"
+
+# Completion subcommands
+complete -c notion -f -n "__fish_seen_subcommand_from completion" -a "install" -d "Install completion"
+complete -c notion -f -n "__fish_seen_subcommand_from completion" -a "show" -d "Show completion script"
+complete -c notion -f -n "__fish_seen_subcommand_from completion" -a "uninstall" -d "Uninstall completion"
+
+# Common options
+complete -c notion -l help -d "Show help"
+complete -c notion -s h -l help -d "Show help"
+"""
+    elif shell == "powershell":
+        return """
+# PowerShell completion for notion
+
+Register-ArgumentCompleter -CommandName notion -ScriptBlock {
+    param($commandName, $wordToComplete, $cursorPosition)
+    
+    $commands = @{
+        'auth' = @('setup', 'test')
+        'db' = @('list', 'show', 'create', 'edit', 'link', 'entry-link')
+        'view' = @('list', 'show', 'update', 'delete')
+        'page' = @('list', 'find', 'link')
+        'completion' = @('install', 'show', 'uninstall')
+        'version' = @()
+    }
+    
+    $arguments = $wordToComplete.Split(' ')
+    
+    if ($arguments.Count -eq 1) {
+        # Complete main commands
+        $commands.Keys | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        }
+    }
+    elseif ($arguments.Count -eq 2 -and $commands.ContainsKey($arguments[0])) {
+        # Complete subcommands
+        $commands[$arguments[0]] | Where-Object { $_ -like "$($arguments[1])*" } | ForEach-Object {
+            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        }
+    }
+}
+"""
+    else:
+        raise ValueError(f"Unsupported shell: {shell}")
+
+
+@completion_app.command("install")
+def install_completion(
+    shell: str = typer.Argument(
+        ..., 
+        help="Shell type: bash, zsh, fish, or powershell"
+    ),
+    show_completion: bool = typer.Option(
+        False, "--show", help="Show the completion script instead of installing"
+    ),
+) -> None:
+    """Install shell completion for notion."""
+    import os
+    from pathlib import Path
+    
+    # Validate shell type
+    valid_shells = ["bash", "zsh", "fish", "powershell"]
+    if shell not in valid_shells:
+        console.print(f"❌ Unsupported shell: {shell}", style="red")
+        console.print(f"Supported shells: {', '.join(valid_shells)}", style="yellow")
+        raise typer.Exit(1)
+    
+    try:
+        # Generate completion script manually for each shell
+        completion_script = generate_completion_script(shell)
+        
+        if show_completion:
+            console.print(f"# {shell.upper()} completion script for notion", style="bold cyan")
+            console.print(completion_script, style="dim")
+            return
+        
+        # Install completion based on shell type
+        if shell == "bash":
+            install_bash_completion(completion_script)
+        elif shell == "zsh":
+            install_zsh_completion(completion_script)
+        elif shell == "fish":
+            install_fish_completion(completion_script)
+        elif shell == "powershell":
+            install_powershell_completion(completion_script)
+            
+    except Exception as e:
+        console.print(f"❌ Failed to install completion: {e}", style="red")
+        raise typer.Exit(1)
+
+
+def install_bash_completion(completion_script: str) -> None:
+    """Install bash completion."""
+    import os
+    from pathlib import Path
+    
+    # Try common bash completion directories
+    completion_dirs = [
+        Path.home() / ".bash_completion.d",
+        Path("/usr/local/etc/bash_completion.d"),
+        Path("/etc/bash_completion.d"),
+    ]
+    
+    # Create user completion directory if it doesn't exist
+    user_dir = Path.home() / ".bash_completion.d"
+    user_dir.mkdir(exist_ok=True)
+    
+    completion_file = user_dir / "notion"
+    completion_file.write_text(completion_script)
+    
+    console.print(f"✅ Bash completion installed to: {completion_file}", style="green")
+    console.print("\n📝 To enable completion, add this to your ~/.bashrc:", style="bold")
+    console.print(f"source {completion_file}", style="cyan")
+    console.print("\nOr restart your terminal.", style="dim")
+
+
+def install_zsh_completion(completion_script: str) -> None:
+    """Install zsh completion."""
+    from pathlib import Path
+    
+    # Check if using oh-my-zsh
+    oh_my_zsh_dir = Path.home() / ".oh-my-zsh"
+    if oh_my_zsh_dir.exists():
+        completion_dir = oh_my_zsh_dir / "custom" / "plugins" / "notion"
+        completion_dir.mkdir(parents=True, exist_ok=True)
+        completion_file = completion_dir / "_notion"
+    else:
+        # Standard zsh completion directory
+        completion_dir = Path.home() / ".zsh" / "completions"
+        completion_dir.mkdir(parents=True, exist_ok=True)
+        completion_file = completion_dir / "_notion"
+    
+    completion_file.write_text(completion_script)
+    
+    console.print(f"✅ Zsh completion installed to: {completion_file}", style="green")
+    
+    if oh_my_zsh_dir.exists():
+        console.print("\n📝 To enable completion, add 'notion' to your plugins in ~/.zshrc:", style="bold")
+        console.print("plugins=(... notion)", style="cyan")
+    else:
+        console.print("\n📝 To enable completion, add this to your ~/.zshrc:", style="bold")
+        console.print(f"fpath=({completion_dir} $fpath)", style="cyan")
+        console.print("autoload -U compinit && compinit", style="cyan")
+    
+    console.print("\nThen restart your terminal or run: source ~/.zshrc", style="dim")
+
+
+def install_fish_completion(completion_script: str) -> None:
+    """Install fish completion."""
+    from pathlib import Path
+    
+    # Fish completion directory
+    completion_dir = Path.home() / ".config" / "fish" / "completions"
+    completion_dir.mkdir(parents=True, exist_ok=True)
+    
+    completion_file = completion_dir / "notion.fish"
+    completion_file.write_text(completion_script)
+    
+    console.print(f"✅ Fish completion installed to: {completion_file}", style="green")
+    console.print("\n📝 Completion should work immediately in new fish sessions.", style="bold")
+    console.print("Or run: fish_update_completions", style="cyan")
+
+
+def install_powershell_completion(completion_script: str) -> None:
+    """Install PowerShell completion."""
+    from pathlib import Path
+    
+    console.print(f"✅ PowerShell completion script generated:", style="green")
+    console.print("\n📝 To enable completion, add this to your PowerShell profile:", style="bold")
+    console.print("# Add notion completion", style="dim")
+    console.print(completion_script, style="cyan")
+    console.print("\nTo find your profile location, run: $PROFILE", style="dim")
+
+
+@completion_app.command("show")
+def show_completion(
+    shell: str = typer.Argument(
+        ..., 
+        help="Shell type: bash, zsh, fish, or powershell"
+    ),
+) -> None:
+    """Show the completion script for a specific shell."""
+    install_completion(shell, show_completion=True)
+
+
+@completion_app.command("uninstall")
+def uninstall_completion(
+    shell: str = typer.Argument(
+        ..., 
+        help="Shell type: bash, zsh, fish, or powershell"
+    ),
+) -> None:
+    """Uninstall shell completion for notion."""
+    from pathlib import Path
+    
+    try:
+        if shell == "bash":
+            completion_file = Path.home() / ".bash_completion.d" / "notion"
+        elif shell == "zsh":
+            # Try both oh-my-zsh and standard locations
+            oh_my_zsh_file = Path.home() / ".oh-my-zsh" / "custom" / "plugins" / "notion" / "_notion"
+            standard_file = Path.home() / ".zsh" / "completions" / "_notion"
+            
+            if oh_my_zsh_file.exists():
+                completion_file = oh_my_zsh_file
+            else:
+                completion_file = standard_file
+        elif shell == "fish":
+            completion_file = Path.home() / ".config" / "fish" / "completions" / "notion.fish"
+        elif shell == "powershell":
+            console.print("⚠️ PowerShell completion must be manually removed from your profile.", style="yellow")
+            console.print("Remove the notion completion lines from: $PROFILE", style="dim")
+            return
+        else:
+            console.print(f"❌ Unsupported shell: {shell}", style="red")
+            raise typer.Exit(1)
+        
+        if completion_file.exists():
+            completion_file.unlink()
+            console.print(f"✅ {shell.capitalize()} completion removed from: {completion_file}", style="green")
+            console.print("🔄 Restart your terminal to apply changes.", style="dim")
+        else:
+            console.print(f"⚠️ {shell.capitalize()} completion not found at: {completion_file}", style="yellow")
+            
+    except Exception as e:
+        console.print(f"❌ Failed to uninstall completion: {e}", style="red")
+        raise typer.Exit(1)
+
+
 @app.command("version")
 def version() -> None:
     """Show the version."""
     from . import __version__
 
-    console.print(f"notion-cli version {__version__}")
+    console.print(f"notion version {__version__}")
 
 
 if __name__ == "__main__":

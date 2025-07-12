@@ -30,7 +30,7 @@ A modern command-line interface for Notion database operations using natural lan
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd notion-cli
+cd notion
 
 # Install with uv (recommended)
 uv sync
@@ -64,12 +64,12 @@ pip install -e .
 
 4. **Authenticate the CLI:**
    ```bash
-   uv run notion-cli auth setup --token <your-integration-token>
+   uv run notion auth setup --token <your-integration-token>
    ```
 
 5. **Test the connection:**
    ```bash
-   uv run notion-cli auth test
+   uv run notion auth test
    ```
 
 ## =� Usage
@@ -78,79 +78,120 @@ pip install -e .
 
 ```bash
 # Set up authentication
-notion-cli auth setup --token <your-token>
+notion auth setup --token <your-token>
 
 # Test current authentication
-notion-cli auth test
+notion auth test
 ```
 
 ### Database Commands
 
 ```bash
 # List all accessible databases
-notion-cli db list
+notion db list
 
 # Show entries from a specific database
-notion-cli db show "My Database"
+notion db show "My Database"
 
 # Show entries with custom columns
-notion-cli db show "Tasks" --columns "Name,Status,Priority,Due Date"
-notion-cli db show "Tasks" -c "Name,Status"
+notion db show "Tasks" --columns "Name,Status,Priority,Due Date"
+notion db show "Tasks" -c "Name,Status"
 
 # Show entries with filters
-notion-cli db show "Tasks" --filter "status=Done"
-notion-cli db show "Tasks" --filter "priority=High,status!=Completed"
-notion-cli db show "Tasks" -f "due<2025-01-01"
+notion db show "Tasks" --filter "status=Done"
+notion db show "Tasks" --filter "priority=High,status!=Completed"
+notion db show "Tasks" -f "due<2025-01-01"
 
 # Advanced filtering examples
-notion-cli db show "Tasks" --filter "status not in 'Rejected,Declined,Hold'"
-notion-cli db show "Tasks" --filter "OR(priority=High,priority=Critical)"
-notion-cli db show "Tasks" --filter "status=Todo,priority in 'High,Critical'"
+notion db show "Tasks" --filter "status not in 'Rejected,Declined,Hold'"
+notion db show "Tasks" --filter "OR(priority=High,priority=Critical)"
+notion db show "Tasks" --filter "status=Todo,priority in 'High,Critical'"
 
 # Limit number of entries (no default limit)
-notion-cli db show "Tasks" --limit 25
-notion-cli db show "Projects" -l 5
+notion db show "Tasks" --limit 25
+notion db show "Projects" -l 5
 
 # Combine columns, filters, and limits
-notion-cli db show "Hiring Pipeline" \
+notion db show "Hiring Pipeline" \
   -c "Name,Status,Resume,Linkedin" \
   --filter "status not in 'Rejected,Declined'" \
   --limit 20
 
 # Save a view for later use
-notion-cli db show "Tasks" \
+notion db show "Tasks" \
   -c "Name,Status,Priority" \
   --filter "status!=Done" \
   --save-view "active-tasks"
+
+# Get database links
+notion db link "Tasks"
+notion db link "Hiring Pipeline" --copy
+
+# Get database entry links
+notion db entry-link "Tasks" "Task Name"
+notion db entry-link "Hiring Pipeline" "John Doe" --exact
+notion db entry-link "Projects" "Project Alpha" --copy
 ```
+
+#### Database Link Management
+
+Quickly get links to databases and specific entries:
+
+```bash
+# Get database link
+notion db link "My Database"
+
+# Copy database link to clipboard
+notion db link "Tasks" --copy
+
+# Find and get entry links (fuzzy search)
+notion db entry-link "Tasks" "meeting"
+notion db entry-link "Hiring Pipeline" "john"
+
+# Get exact entry match
+notion db entry-link "Tasks" "Team Meeting" --exact
+
+# Copy entry link to clipboard
+notion db entry-link "Projects" "Project Alpha" --copy
+
+# Limit search results for entries
+notion db entry-link "Tasks" "task" --limit 3
+```
+
+**Entry Link Features**:
+- **Fuzzy Search**: Find entries containing your query in their title/name
+- **Smart Title Detection**: Automatically finds title, name, or subject fields
+- **Multiple Results**: Shows all matching entries with relevance scores
+- **Interactive Selection**: Choose which entry to copy when multiple matches found
+- **Clipboard Support**: Copy links directly with `--copy` flag
 
 ### View Management Commands
 
 ```bash
 # List all saved views
-notion-cli view list
+notion view list
 
 # Load and display a saved view
-notion-cli view show "active-tasks"
+notion view show "active-tasks"
 
 # Update an existing view with new filters or columns
-notion-cli view update "active-tasks" --filter "priority=High"
-notion-cli view update "active-tasks" --columns "Name,Status,Due Date"
-notion-cli view update "active-tasks" --limit 50
+notion view update "active-tasks" --filter "priority=High"
+notion view update "active-tasks" --columns "Name,Status,Due Date"
+notion view update "active-tasks" --limit 50
 
 # Clear specific settings from a view
-notion-cli view update "active-tasks" --clear-filter
-notion-cli view update "active-tasks" --clear-columns
-notion-cli view update "active-tasks" --clear-limit
+notion view update "active-tasks" --clear-filter
+notion view update "active-tasks" --clear-columns
+notion view update "active-tasks" --clear-limit
 
 # Update multiple settings at once
-notion-cli view update "active-tasks" \
+notion view update "active-tasks" \
   --columns "Name,Priority,Status" \
   --filter "status!=Done" \
   --limit 25
 
 # Delete a saved view
-notion-cli view delete "old-view"
+notion view delete "old-view"
 ```
 
 ### Page Management Commands
@@ -159,26 +200,26 @@ Find and access Notion pages quickly with link management functionality.
 
 ```bash
 # List all accessible pages
-notion-cli page list
+notion page list
 
 # Find pages by name (fuzzy search)
-notion-cli page find "Meeting"
-notion-cli page find "project notes"
+notion page find "Meeting"
+notion page find "project notes"
 
 # Find with exact matching
-notion-cli page find "Meeting Notes" --exact
+notion page find "Meeting Notes" --exact
 
 # Limit search results
-notion-cli page find "task" --limit 5
+notion page find "task" --limit 5
 
 # Get a specific page link
-notion-cli page link "Meeting Notes"
+notion page link "Meeting Notes"
 
 # Copy link to clipboard
-notion-cli page link "Meeting Notes" --copy
+notion page link "Meeting Notes" --copy
 
 # Get only public URL (if page is shared publicly)
-notion-cli page link "Meeting Notes" --public
+notion page link "Meeting Notes" --public
 ```
 
 #### Page Search Features
@@ -201,7 +242,7 @@ notion-cli page link "Meeting Notes" --public
 #### Example Output
 
 ```bash
-$ notion-cli page find "meeting"
+$ notion page find "meeting"
 📄 Found 3 page(s) matching 'meeting'
 
 1. Meeting Notes
@@ -225,24 +266,24 @@ Create and update Notion database entries using natural language with AI assista
 
 ```bash
 # Create a new entry using natural language
-notion-cli db create "Tasks" "Create a high priority task to review quarterly reports due next Friday"
+notion db create "Tasks" "Create a high priority task to review quarterly reports due next Friday"
 
 # Create with custom AI model
-notion-cli db create "Projects" "New machine learning project for customer segmentation" --model gpt-4
+notion db create "Projects" "New machine learning project for customer segmentation" --model gpt-4
 
 # Skip confirmation prompt
-notion-cli db create "Contacts" "Add John Smith as a new client contact" --yes
+notion db create "Contacts" "Add John Smith as a new client contact" --yes
 
 # Interactive mode - revise prompt if AI output isn't right
-notion-cli db create "Tasks" "Schedule team meeting" --interactive
+notion db create "Tasks" "Schedule team meeting" --interactive
 
 # Create entry with file uploads
-notion-cli db create "Candidates" "New applicant Sarah Johnson with strong Python skills" \
+notion db create "Candidates" "New applicant Sarah Johnson with strong Python skills" \
   --file /path/to/resume.pdf \
   --file /path/to/portfolio.zip
 
 # Combine interactive mode with files
-notion-cli db create "Projects" "New documentation project" \
+notion db create "Projects" "New documentation project" \
   --interactive \
   --file /path/to/requirements.md \
   --file /path/to/mockups.png
@@ -252,24 +293,24 @@ notion-cli db create "Projects" "New documentation project" \
 
 ```bash
 # Update entries using natural language
-notion-cli db edit "Tasks" "Mark all high priority tasks as completed"
+notion db edit "Tasks" "Mark all high priority tasks as completed"
 
 # Update specific entries by name
-notion-cli db edit "Hiring Pipeline" "Update status to Interview for John Doe"
+notion db edit "Hiring Pipeline" "Update status to Interview for John Doe"
 
 # Add files to existing entries
-notion-cli db edit "Candidates" "Add resume to Sarah Johnson profile" \
+notion db edit "Candidates" "Add resume to Sarah Johnson profile" \
   --file /path/to/updated-resume.pdf
 
 # Update with custom AI model
-notion-cli db edit "Projects" "Set all machine learning projects to high priority" \
+notion db edit "Projects" "Set all machine learning projects to high priority" \
   --model gpt-4
 
 # Skip confirmation prompt
-notion-cli db edit "Tasks" "Update all completed tasks to archived status" --yes
+notion db edit "Tasks" "Update all completed tasks to archived status" --yes
 
 # Update multiple properties at once
-notion-cli db edit "Candidates" "Update John Smith: set status to Hired, add LinkedIn profile, and set start date to next Monday"
+notion db edit "Candidates" "Update John Smith: set status to Hired, add LinkedIn profile, and set start date to next Monday"
 ```
 
 #### Interactive Mode
@@ -277,7 +318,7 @@ notion-cli db edit "Candidates" "Update John Smith: set status to Hired, add Lin
 When using `--interactive` mode, you can refine your prompts if the AI doesn't generate the expected output:
 
 ```bash
-notion-cli db create "Tasks" "Create a task" --interactive
+notion db create "Tasks" "Create a task" --interactive
 ```
 
 The AI will show you the generated result and offer options:
@@ -291,11 +332,11 @@ Upload files directly to Notion properties during creation or editing:
 
 ```bash
 # Single file upload
-notion-cli db create "Documents" "Upload project proposal" \
+notion db create "Documents" "Upload project proposal" \
   --file /path/to/proposal.pdf
 
 # Multiple files
-notion-cli db create "Portfolio" "Add new project showcase" \
+notion db create "Portfolio" "Add new project showcase" \
   --file /path/to/screenshot1.png \
   --file /path/to/screenshot2.png \
   --file /path/to/demo-video.mp4
@@ -320,7 +361,7 @@ Configure which AI model to use for natural language processing:
 
 ```bash
 # Use specific model for one command
-notion-cli db create "Tasks" "Create urgent task" --model gpt-4
+notion db create "Tasks" "Create urgent task" --model gpt-4
 
 # Set default model via environment variable
 export NOTION_CLI_LLM_MODEL=gpt-4
@@ -332,18 +373,64 @@ export NOTION_CLI_LLM_MODEL=gpt-4
 # - claude-3-opus (requires ANTHROPIC_API_KEY)
 ```
 
+### Shell Completion
+
+Enable autocompletion for faster command-line usage in your shell:
+
+```bash
+# Install completion for your shell
+notion completion install bash    # For Bash
+notion completion install zsh     # For Zsh
+notion completion install fish    # For Fish
+notion completion install powershell  # For PowerShell
+
+# Show completion script without installing
+notion completion show bash
+
+# Uninstall completion
+notion completion uninstall bash
+```
+
+#### Shell-Specific Setup
+
+**Bash:**
+- Installs to `~/.bash_completion.d/notion`
+- Add `source ~/.bash_completion.d/notion` to your `~/.bashrc`
+- Or restart your terminal
+
+**Zsh:**
+- **Oh My Zsh users**: Installs as custom plugin, add `notion` to plugins in `~/.zshrc`
+- **Standard Zsh**: Installs to `~/.zsh/completions/`, add completion directory to fpath
+- Restart terminal or run `source ~/.zshrc`
+
+**Fish:**
+- Installs to `~/.config/fish/completions/notion.fish`
+- Works immediately in new sessions or run `fish_update_completions`
+
+**PowerShell:**
+- Shows script to add to your PowerShell profile
+- Find profile location with `$PROFILE` command
+
+#### Completion Features
+
+- **Command completion**: Type `notion <TAB>` to see all available commands
+- **Subcommand completion**: Type `notion db <TAB>` to see database commands
+- **Context-aware**: Completion adapts based on the current command context
+- **Help descriptions**: Each completion shows helpful descriptions
+
 ### General Commands
 
 ```bash
 # Show version
-notion-cli version
+notion version
 
 # Get help
-notion-cli --help
-notion-cli auth --help
-notion-cli db --help
-notion-cli view --help
-notion-cli page --help
+notion --help
+notion auth --help
+notion db --help
+notion view --help
+notion page --help
+notion completion --help
 ```
 
 ## Advanced Features
@@ -363,29 +450,29 @@ The CLI supports powerful filtering capabilities to query your Notion databases:
 
 ```bash
 # Simple equality
-notion-cli db show "Tasks" --filter "status=Done"
+notion db show "Tasks" --filter "status=Done"
 
 # Multiple conditions (AND by default)
-notion-cli db show "Tasks" --filter "status=Todo,priority=High"
+notion db show "Tasks" --filter "status=Todo,priority=High"
 
 # Text contains
-notion-cli db show "Tasks" --filter "title~bug"
+notion db show "Tasks" --filter "title~bug"
 
 # Not equal
-notion-cli db show "Tasks" --filter "status!=Completed"
+notion db show "Tasks" --filter "status!=Completed"
 
 # Multiple values with 'in' operator
-notion-cli db show "Tasks" --filter "status in 'Todo,InProgress'"
+notion db show "Tasks" --filter "status in 'Todo,InProgress'"
 
 # Exclude multiple values with 'not in'
-notion-cli db show "Hiring" --filter "status not in 'Rejected,Declined,Hold'"
+notion db show "Hiring" --filter "status not in 'Rejected,Declined,Hold'"
 
 # Date comparisons
-notion-cli db show "Tasks" --filter "due<2025-01-01"
-notion-cli db show "Tasks" --filter "created>=2024-12-01"
+notion db show "Tasks" --filter "due<2025-01-01"
+notion db show "Tasks" --filter "created>=2024-12-01"
 
 # Number comparisons
-notion-cli db show "Tasks" --filter "priority_score>=8"
+notion db show "Tasks" --filter "priority_score>=8"
 ```
 
 #### Logical Functions
@@ -394,16 +481,16 @@ Use logical functions for complex queries:
 
 ```bash
 # OR - matches any condition
-notion-cli db show "Tasks" --filter "OR(status=Done,status=InProgress)"
+notion db show "Tasks" --filter "OR(status=Done,status=InProgress)"
 
 # AND - explicit grouping
-notion-cli db show "Tasks" --filter "AND(priority=High,status=Todo)"
+notion db show "Tasks" --filter "AND(priority=High,status=Todo)"
 
 # NOT - negation
-notion-cli db show "Tasks" --filter "NOT(status=Done)"
+notion db show "Tasks" --filter "NOT(status=Done)"
 
 # Nested logical operations
-notion-cli db show "Tasks" --filter "priority=High,OR(status=Todo,status=InProgress)"
+notion db show "Tasks" --filter "priority=High,OR(status=Todo,status=InProgress)"
 ```
 
 ### Column Selection
@@ -412,14 +499,14 @@ Control which columns are displayed in the output:
 
 ```bash
 # Show specific columns
-notion-cli db show "Tasks" --columns "Name,Status,Priority"
-notion-cli db show "Tasks" -c "Name,Status"
+notion db show "Tasks" --columns "Name,Status,Priority"
+notion db show "Tasks" -c "Name,Status"
 
 # Show all columns (default behavior when no limit is set)
-notion-cli db show "Tasks"
+notion db show "Tasks"
 
 # Combine with filters
-notion-cli db show "Tasks" -c "Name,Status" --filter "priority=High"
+notion db show "Tasks" -c "Name,Status" --filter "priority=High"
 ```
 
 **Smart Column Prioritization**: When no columns are specified, the CLI automatically prioritizes:
@@ -436,7 +523,7 @@ Save and reuse your frequently used database configurations:
 
 ```bash
 # Save a view with current settings
-notion-cli db show "Hiring Pipeline" \
+notion db show "Hiring Pipeline" \
   -c "Name,Status,Resume,Linkedin" \
   --filter "status not in 'Rejected,Declined'" \
   --limit 20 \
@@ -447,26 +534,26 @@ notion-cli db show "Hiring Pipeline" \
 
 ```bash
 # List all saved views
-notion-cli view list
+notion view list
 
 # Use a saved view
-notion-cli view show "active-candidates"
+notion view show "active-candidates"
 
 # Update an existing view
-notion-cli view update "active-candidates" --filter "status=Interview"
-notion-cli view update "active-candidates" --columns "Name,Status,Experience"
-notion-cli view update "active-candidates" --clear-filter --limit 50
+notion view update "active-candidates" --filter "status=Interview"
+notion view update "active-candidates" --columns "Name,Status,Experience"
+notion view update "active-candidates" --clear-filter --limit 50
 
 # Delete a view
-notion-cli view delete "old-view"
+notion view delete "old-view"
 ```
 
 #### View Storage
 
 Views are stored in platform-specific locations:
-- **macOS**: `~/Library/Application Support/notion-cli/views.json`
-- **Linux**: `~/.config/notion-cli/views.json`
-- **Windows**: `%APPDATA%\notion-cli\views.json`
+- **macOS**: `~/Library/Application Support/notion/views.json`
+- **Linux**: `~/.config/notion/views.json`
+- **Windows**: `%APPDATA%\notion\views.json`
 
 ### Column Width Optimization
 
@@ -511,6 +598,16 @@ GOOGLE_API_KEY=AI...                     # For Gemini models
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude models | None |
 | `GOOGLE_API_KEY` | Google API key for Gemini models | None |
 
+### Optional Dependencies
+
+Some features require additional packages that are automatically installed:
+
+| Feature | Package | Purpose |
+|---------|---------|---------|
+| Clipboard support | `pyperclip` | Copy page links to clipboard with `--copy` flag |
+| File uploads | `requests` | Upload files to Notion via API |
+| Environment variables | `python-dotenv` | Load configuration from `.env` files |
+
 ## Troubleshooting
 
 ### Common Issues
@@ -519,11 +616,11 @@ GOOGLE_API_KEY=AI...                     # For Gemini models
 ```bash
 # Issue: "No Notion integration token found"
 # Solution: Set up authentication
-notion-cli auth setup --token <your-token>
+notion auth setup --token <your-token>
 
 # Issue: "Authentication failed"
 # Solution: Check token permissions and database sharing
-notion-cli auth test
+notion auth test
 ```
 
 #### AI Feature Issues
@@ -534,7 +631,7 @@ echo "OPENAI_API_KEY=sk-your-key-here" >> .env
 
 # Issue: AI generates wrong output
 # Solution: Use interactive mode and refine prompts
-notion-cli db create "Database" "Your prompt" --interactive
+notion db create "Database" "Your prompt" --interactive
 ```
 
 #### File Upload Issues
@@ -546,29 +643,49 @@ notion-cli db create "Database" "Your prompt" --interactive
 # Issue: "File upload failed"
 # Solution: Check file permissions and Notion token access
 ls -la /path/to/file
-notion-cli auth test
+notion auth test
 ```
 
 #### Database Access Issues
 ```bash
 # Issue: "Database 'Name' not found"
 # Solution: Check database name and sharing permissions
-notion-cli db list
+notion db list
 
 # Issue: Empty database list
 # Solution: Share databases with your integration in Notion
+```
+
+#### Page Access Issues
+```bash
+# Issue: "No pages found matching 'name'"
+# Solution: Check page name and try fuzzy search
+notion page list
+notion page find "partial name"
+
+# Issue: Empty page list
+# Solution: Share pages with your integration in Notion
+
+# Issue: "This page is not shared publicly"
+# Solution: Make page public in Notion or use private URL
+notion page link "Page Name"  # Shows both private and public URLs
 ```
 
 ### Getting Help
 
 ```bash
 # Get general help
-notion-cli --help
+notion --help
 
 # Get help for specific commands
-notion-cli db --help
-notion-cli db create --help
-notion-cli db edit --help
+notion db --help
+notion db create --help
+notion db edit --help
+notion db link --help
+notion db entry-link --help
+notion page --help
+notion page find --help
+notion page link --help
 ```
 
 ### Debug Mode
@@ -578,10 +695,10 @@ Run commands with increased verbosity for troubleshooting:
 ```bash
 # Enable debug output (if implemented)
 export DEBUG=1
-notion-cli db list
+notion db list
 
 # Check configuration files
-cat ~/.config/notion-cli/config.json  # Linux/macOS
-cat %APPDATA%\notion-cli\config.json  # Windows
+cat ~/.config/notion/config.toml  # Linux/macOS
+cat %APPDATA%\notion\config.toml  # Windows
 ```
 

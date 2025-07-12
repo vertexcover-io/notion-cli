@@ -20,7 +20,7 @@ class NotionClientWrapper:
         if not config.integration_token:
             raise ValueError(
                 "No Notion integration token found. "
-                "Run 'notion-cli auth setup --token <your-token>' first."
+                "Run 'notion auth setup --token <your-token>' first."
             )
 
         self.client = Client(auth=config.integration_token)
@@ -579,6 +579,103 @@ class NotionClientWrapper:
         # Note: Notion API doesn't directly expose public URL info
         # We can only provide the private URL and let users know about public sharing
         public_url = page.get("public_url")  # This field may not exist in API
+        if public_url:
+            urls["public"] = public_url
+        
+        return urls
+
+    def get_database_entry_by_name(
+        self, 
+        database_name: str, 
+        entry_name: str, 
+        fuzzy: bool = True
+    ) -> list[dict[str, Any]]:
+        """Get database entries by searching for a specific name/title."""
+        database = self.get_database_by_name(database_name)
+        if not database:
+            raise ValueError(f"Database '{database_name}' not found")
+        
+        database_id = database.get("id", "")
+        properties = database.get("properties", {})
+        
+        # Get all entries
+        all_entries = self.get_database_entries(database_id)
+        
+        if not all_entries:
+            return []
+        
+        matching_entries = []
+        entry_name_lower = entry_name.lower()
+        
+        for entry in all_entries:
+            entry_properties = entry.get("properties", {})
+            
+            # Look for title-like properties
+            entry_title = self._extract_entry_title(entry_properties)
+            entry_title_lower = entry_title.lower()
+            
+            if fuzzy:
+                # Fuzzy matching - check if query is contained in title
+                if entry_name_lower in entry_title_lower:
+                    matching_entries.append({
+                        **entry,
+                        "_title": entry_title,
+                        "_match_score": self._calculate_match_score(entry_name_lower, entry_title_lower)
+                    })
+            else:
+                # Exact matching
+                if entry_title_lower == entry_name_lower:
+                    matching_entries.append({
+                        **entry,
+                        "_title": entry_title,
+                        "_match_score": 1.0
+                    })
+        
+        # Sort by match score (higher is better)
+        matching_entries.sort(key=lambda x: x["_match_score"], reverse=True)
+        return matching_entries
+
+    def _extract_entry_title(self, entry_properties: dict[str, Any]) -> str:
+        """Extract title from database entry properties."""
+        # Look for title property first
+        for prop_name, prop_data in entry_properties.items():
+            if prop_data.get("type") == "title":
+                title_content = prop_data.get("title", [])
+                if title_content:
+                    return title_content[0].get("plain_text", "Untitled")
+        
+        # Look for common name fields
+        name_fields = ["Name", "Title", "Task", "Subject", "Item"]
+        for field_name in name_fields:
+            if field_name in entry_properties:
+                prop_data = entry_properties[field_name]
+                value = self.extract_property_value(prop_data)
+                if value and value.strip():
+                    return value.strip()
+        
+        # Fallback to first text-like property
+        for prop_name, prop_data in entry_properties.items():
+            prop_type = prop_data.get("type", "")
+            if prop_type in ["rich_text", "title"]:
+                value = self.extract_property_value(prop_data)
+                if value and value.strip():
+                    return value.strip()
+        
+        return "Untitled"
+
+    def get_entry_urls(self, entry: dict[str, Any]) -> dict[str, str]:
+        """Get URLs for a database entry."""
+        entry_id = entry.get("id", "")
+        entry_url = entry.get("url", "")
+        
+        urls = {
+            "private": entry_url,
+            "public": None
+        }
+        
+        # Check if entry has public access
+        # Note: Database entries inherit public access from the database
+        public_url = entry.get("public_url")  # This field may not exist in API
         if public_url:
             urls["public"] = public_url
         

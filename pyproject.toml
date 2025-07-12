@@ -1,5 +1,5 @@
 [project]
-name = "notion-cli"
+name = "notion"
 version = "0.1.0"
 description = "A CLI tool for Notion database operations using natural language"
 readme = "README.md"
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-notion-cli = "notion_cli.main:app"
+notion = "notion_cli.main:app"
 
 [build-system]
 requires = ["hatchling"]

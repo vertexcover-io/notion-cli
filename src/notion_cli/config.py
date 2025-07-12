@@ -24,7 +24,7 @@ class ConfigManager:
             self.config_path = config_path
         else:
             # Use platformdirs to get the proper config directory for the platform
-            config_dir = Path(user_config_dir("notion-cli", "notion-cli"))
+            config_dir = Path(user_config_dir("notion", "notion"))
             self.config_path = config_dir / "config.toml"
 
         # Ensure the config directory exists
