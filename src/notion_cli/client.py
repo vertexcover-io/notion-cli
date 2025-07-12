@@ -482,3 +482,104 @@ class NotionClientWrapper:
             result[prop_name] = file_objects
         
         return result
+
+    def search_pages(self, query: str = "") -> list[dict[str, Any]]:
+        """Search for pages in the workspace."""
+        try:
+            search_params = {
+                "filter": {"property": "object", "value": "page"}
+            }
+            
+            if query:
+                search_params["query"] = query
+            
+            response = self.client.search(**search_params)
+            return response.get("results", [])
+        except APIResponseError as e:
+            raise Exception(f"Failed to search pages: {e}")
+
+    def get_page_by_name(self, name: str, fuzzy: bool = True) -> list[dict[str, Any]]:
+        """Get pages by name with optional fuzzy matching."""
+        all_pages = self.search_pages()
+        
+        if not all_pages:
+            return []
+        
+        matching_pages = []
+        name_lower = name.lower()
+        
+        for page in all_pages:
+            page_title = self._extract_page_title(page)
+            page_title_lower = page_title.lower()
+            
+            if fuzzy:
+                # Fuzzy matching - check if query is contained in title
+                if name_lower in page_title_lower:
+                    matching_pages.append({
+                        **page,
+                        "_title": page_title,
+                        "_match_score": self._calculate_match_score(name_lower, page_title_lower)
+                    })
+            else:
+                # Exact matching
+                if page_title_lower == name_lower:
+                    matching_pages.append({
+                        **page,
+                        "_title": page_title,
+                        "_match_score": 1.0
+                    })
+        
+        # Sort by match score (higher is better)
+        matching_pages.sort(key=lambda x: x["_match_score"], reverse=True)
+        return matching_pages
+
+    def _extract_page_title(self, page: dict[str, Any]) -> str:
+        """Extract title from a page object."""
+        properties = page.get("properties", {})
+        
+        # Look for title property
+        for prop_name, prop_data in properties.items():
+            if prop_data.get("type") == "title":
+                title_content = prop_data.get("title", [])
+                if title_content:
+                    return title_content[0].get("plain_text", "Untitled")
+        
+        # Fallback to page title in root
+        if "title" in page and page["title"]:
+            if isinstance(page["title"], list) and page["title"]:
+                return page["title"][0].get("plain_text", "Untitled")
+            elif isinstance(page["title"], str):
+                return page["title"]
+        
+        return "Untitled"
+
+    def _calculate_match_score(self, query: str, title: str) -> float:
+        """Calculate a simple match score for fuzzy search."""
+        if query == title:
+            return 1.0
+        elif title.startswith(query):
+            return 0.9
+        elif query in title:
+            # Score based on how much of the title matches
+            return len(query) / len(title)
+        else:
+            return 0.0
+
+    def get_page_urls(self, page: dict[str, Any]) -> dict[str, str]:
+        """Get both private and public URLs for a page."""
+        page_id = page.get("id", "")
+        notion_url = page.get("url", "")
+        
+        urls = {
+            "private": notion_url,
+            "public": None
+        }
+        
+        # Check if page has public access
+        # Note: Notion API doesn't directly expose public URL info
+        # We can only provide the private URL and let users know about public sharing
+        public_url = page.get("public_url")  # This field may not exist in API
+        if public_url:
+            urls["public"] = public_url
+        
+        return urls

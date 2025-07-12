@@ -19,10 +19,12 @@ app = typer.Typer(
 auth_app = typer.Typer(help="Authentication commands")
 db_app = typer.Typer(help="Database commands")
 view_app = typer.Typer(help="View management commands")
+page_app = typer.Typer(help="Page management commands")
 
 app.add_typer(auth_app, name="auth")
 app.add_typer(db_app, name="db")
 app.add_typer(view_app, name="view")
+app.add_typer(page_app, name="page")
 
 console = Console()
 
@@ -802,6 +804,156 @@ def edit_entries(
             style="green"
         )
 
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        raise typer.Exit(1)
+
+
+# Page management commands
+
+@page_app.command("list")
+def list_pages() -> None:
+    """List all accessible pages."""
+    try:
+        client = NotionClientWrapper()
+        pages = client.search_pages()
+
+        if not pages:
+            console.print("No pages found.", style="yellow")
+            return
+
+        table = Table(title="Notion Pages")
+        table.add_column("Name", style="cyan")
+        table.add_column("ID", style="magenta")
+        table.add_column("URL", style="blue")
+
+        for page in pages:
+            title = client._extract_page_title(page)
+            page_id = page.get("id", "")
+            page_url = page.get("url", "")
+
+            table.add_row(title, page_id, page_url)
+
+        console.print(table)
+
+    except ValueError as e:
+        console.print(f"❌ {e}", style="red")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@page_app.command("find")
+def find_page(
+    name: str = typer.Argument(..., help="Page name to search for"),
+    exact: bool = typer.Option(
+        False, "--exact", "-e", help="Use exact matching instead of fuzzy search"
+    ),
+    limit: int = typer.Option(
+        10, "--limit", "-l", help="Maximum number of results to show"
+    ),
+) -> None:
+    """Find pages by name and show their links."""
+    try:
+        client = NotionClientWrapper()
+        pages = client.get_page_by_name(name, fuzzy=not exact)
+
+        if not pages:
+            console.print(f"❌ No pages found matching '{name}'.", style="red")
+            console.print("Use 'notion-cli page list' to see all pages.", style="yellow")
+            raise typer.Exit(1)
+
+        # Limit results
+        if len(pages) > limit:
+            pages = pages[:limit]
+            console.print(f"📄 Showing top {limit} results (found {len(pages)} total)")
+        else:
+            console.print(f"📄 Found {len(pages)} page(s) matching '{name}'")
+
+        for i, page in enumerate(pages, 1):
+            title = page.get("_title", "Untitled")
+            match_score = page.get("_match_score", 0)
+            page_id = page.get("id", "")
+            
+            # Get URLs
+            urls = client.get_page_urls(page)
+            
+            console.print(f"\n{i}. {title}", style="bold cyan")
+            console.print(f"   Match Score: {match_score:.2f}", style="dim")
+            console.print(f"   Page ID: {page_id}", style="dim")
+            console.print(f"   Private URL: {urls['private']}", style="blue")
+            
+            if urls['public']:
+                console.print(f"   Public URL: {urls['public']}", style="green")
+            else:
+                console.print("   Public URL: Not shared publicly", style="yellow")
+
+    except ValueError as e:
+        console.print(f"❌ {e}", style="red")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@page_app.command("link")
+def get_page_link(
+    name: str = typer.Argument(..., help="Page name to get link for"),
+    copy: bool = typer.Option(
+        False, "--copy", "-c", help="Copy the link to clipboard"
+    ),
+    public_only: bool = typer.Option(
+        False, "--public", "-p", help="Only show public link if available"
+    ),
+) -> None:
+    """Get the link for a specific page."""
+    try:
+        client = NotionClientWrapper()
+        pages = client.get_page_by_name(name, fuzzy=True)
+
+        if not pages:
+            console.print(f"❌ No pages found matching '{name}'.", style="red")
+            raise typer.Exit(1)
+
+        # Get the best match (first result)
+        page = pages[0]
+        title = page.get("_title", "Untitled")
+        urls = client.get_page_urls(page)
+
+        console.print(f"📄 Page: {title}", style="bold cyan")
+
+        if public_only:
+            if urls['public']:
+                console.print(f"🔗 Public URL: {urls['public']}", style="green")
+                url_to_copy = urls['public']
+            else:
+                console.print("❌ This page is not shared publicly.", style="red")
+                raise typer.Exit(1)
+        else:
+            console.print(f"🔗 Private URL: {urls['private']}", style="blue")
+            url_to_copy = urls['private']
+            
+            if urls['public']:
+                console.print(f"🌐 Public URL: {urls['public']}", style="green")
+
+        # Copy to clipboard if requested
+        if copy:
+            try:
+                import pyperclip
+                pyperclip.copy(url_to_copy)
+                console.print("✅ Link copied to clipboard!", style="green")
+            except ImportError:
+                console.print(
+                    "⚠️ pyperclip not installed. Install with: pip install pyperclip", 
+                    style="yellow"
+                )
+            except Exception as e:
+                console.print(f"⚠️ Failed to copy to clipboard: {e}", style="yellow")
+
+    except ValueError as e:
+        console.print(f"❌ {e}", style="red")
+        raise typer.Exit(1)
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
         raise typer.Exit(1)
