@@ -1,8 +1,12 @@
 """Main CLI application entry point."""
-
+import traceback
 import shutil
+from pathlib import Path
+import io
 
 import typer
+import questionary
+from md2notionpage.core import parse_md
 from rich.console import Console
 from rich.table import Table
 
@@ -481,7 +485,7 @@ def update_view(
         if not updates:
             console.print(
                 "❌ No updates specified. Use --columns, --filter, --limit, or "
-                "their --clear- variants.",
+                "their --clear-variants.",
                 style="red"
             )
             raise typer.Exit(1)
@@ -1058,6 +1062,119 @@ def find_page(
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@page_app.command("create")
+def create_page(
+    filepath: Path = typer.Argument(
+        ...,
+        help="Path to the local file to be converted into a Notion page.",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+    ),
+    parent_page_name: str = typer.Option(
+        None, "--parent-name", "-n", help="The name of the parent page."
+    ),
+    parent_page_id: str = typer.Option(
+        None, "--parent-id", "-p", help="The ID of the parent page."
+    ),
+) -> None:
+    """Create a new page from a local file."""
+    try:
+        client = NotionClientWrapper()
+
+        # Determine the parent page
+        parent_id = None
+        if parent_page_id:
+            parent_id = parent_page_id
+        elif parent_page_name:
+            with console.status(f"Searching for parent page '{parent_page_name}'..."):
+                pages = client.get_page_by_name(parent_page_name)
+                if not pages:
+                    console.print(
+                        f"❌ Parent page '{parent_page_name}' not found.", style="red"
+                    )
+                    raise typer.Exit(1)
+                elif len(pages) > 1:
+                    console.print(
+                        f"Multiple pages found with the name '{parent_page_name}'. Please specify by ID.",
+                        style="yellow",
+                    )
+                    # Optionally, you can list the pages here for the user to choose
+                    raise typer.Exit(1)
+                parent_id = pages[0]["id"]
+        else:
+            with console.status("Fetching pages..."):
+                all_pages = client.search_pages()
+            
+            if not all_pages:
+                console.print("No pages found to select as a parent.", style="yellow")
+                # Ask if the user wants to create a top-level page
+                if not typer.confirm("Create as a top-level page?"):
+                    raise typer.Exit()
+            else:
+                # Sort pages alphabetically by title before creating choices
+                all_pages.sort(key=lambda page: client._extract_page_title(page))
+                
+                page_choices = [
+                    (client._extract_page_title(page), page["id"]) for page in all_pages
+                ]
+                # Add an option for no parent
+                page_choices.insert(0, ("No parent (top-level page)", None))
+
+                selected_title = questionary.autocomplete(
+                    "Select a parent page (start typing to filter):",
+                    choices=[title for title, _ in page_choices],
+                ).ask()
+
+                if selected_title is None:
+                    console.print("No parent page selected. Aborting.", style="yellow")
+                    raise typer.Exit()
+                
+                # Find the id corresponding to the selected title
+                for title, pid in page_choices:
+                    if title == selected_title:
+                        parent_id = pid
+                        break
+
+
+        # Read and convert the file content
+        with console.status("Converting file to Notion format..."):
+            with open(filepath, "r", encoding="utf-8") as f:
+                md_content = f.read()
+            
+            # Extract title from the first H1, or use the filename
+            page_title = filepath.stem
+            if md_content.strip().startswith("# "):
+                title_line = md_content.strip().splitlines()[0]
+                page_title = title_line.lstrip("# ").strip()
+                # Remove title from content
+                md_content = "\n".join(md_content.strip().splitlines()[1:])
+
+            # Convert markdown to Notion blocks
+            children = parse_md(md_content)
+
+        # Create the page
+        with console.status(f"Creating page in Notion...: {page_title}. Parent ID: {parent_id}"):
+            result = client.create_page_in_page(parent_id, page_title, children)
+
+        entry_id = result.get("id", "")
+        entry_url = result.get("url", "")
+
+        console.print("✅ Page created successfully!", style="green")
+        console.print(f"🆔 Page ID: {entry_id}")
+        if entry_url:
+            console.print(f"🔗 URL: {entry_url}")
+
+    except FileNotFoundError:
+        console.print(f"❌ File not found at: {filepath}", style="red")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        traceback.print_exc()
         raise typer.Exit(1)
 
 

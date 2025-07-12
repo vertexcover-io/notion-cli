@@ -103,6 +103,23 @@ class NotionClientWrapper:
         except APIResponseError as e:
             raise Exception(f"Failed to create page in database {database_id}: {e}")
 
+    def create_page_in_page(
+        self, parent_page_id: str | None, title: str, children: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Create a new page within another page."""
+        try:
+            parent = {}
+            if parent_page_id:
+                parent = {"page_id": parent_page_id}
+            
+            return self.client.pages.create(
+                parent=parent,
+                properties={"title": {"title": [{"text": {"content": title}}]}},
+                children=children,
+            )
+        except APIResponseError as e:
+            raise Exception(f"Failed to create page: {e}")
+
     def update_page(self, page_id: str, properties: dict[str, Any]) -> dict[str, Any]:
         """Update an existing page."""
         try:
