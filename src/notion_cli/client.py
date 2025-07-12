@@ -1,5 +1,6 @@
 """Notion API client wrapper."""
 
+import os
 from typing import Any
 
 from notion_client import Client
@@ -383,3 +384,101 @@ class NotionClientWrapper:
             total_width = sum(widths) + border_overhead
 
         return columns, widths
+
+    def upload_file(self, file_path: str) -> dict[str, Any]:
+        """Upload a file to Notion and return the file object."""
+        import os
+        import mimetypes
+        import requests
+        
+        if not os.path.exists(file_path):
+            raise ValueError(f"File not found: {file_path}")
+        
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+        
+        # Check file size limit (20MB for single-part upload)
+        max_size = 20 * 1024 * 1024  # 20MB in bytes
+        if file_size > max_size:
+            raise ValueError(f"File size ({file_size} bytes) exceeds 20MB limit for single-part upload")
+        
+        try:
+            # Step 1: Create file upload object
+            create_response = requests.post(
+                "https://api.notion.com/v1/file_uploads",
+                json={"filename": file_name},
+                headers={
+                    "Authorization": f"Bearer {self.config.integration_token}",
+                    "Content-Type": "application/json",
+                    "Notion-Version": "2022-06-28"
+                }
+            )
+            create_response.raise_for_status()
+            upload_data = create_response.json()
+            
+            file_upload_id = upload_data["id"]
+            
+            # Step 2: Upload file contents
+            with open(file_path, "rb") as f:
+                mime_type, _ = mimetypes.guess_type(file_path)
+                if not mime_type:
+                    mime_type = "application/octet-stream"
+                
+                files = {"file": (file_name, f, mime_type)}
+                upload_response = requests.post(
+                    f"https://api.notion.com/v1/file_uploads/{file_upload_id}/send",
+                    headers={
+                        "Authorization": f"Bearer {self.config.integration_token}",
+                        "Notion-Version": "2022-06-28"
+                    },
+                    files=files
+                )
+                upload_response.raise_for_status()
+            
+            # Return file object for use in properties
+            # Use file_upload type with the upload ID
+            return {
+                "name": file_name,
+                "type": "file_upload", 
+                "file_upload": {
+                    "id": file_upload_id
+                }
+            }
+            
+        except requests.exceptions.RequestException as e:
+            if hasattr(e.response, 'json'):
+                error_details = e.response.json()
+                raise ValueError(f"File upload failed: {error_details}")
+            else:
+                raise ValueError(f"File upload failed: {e}")
+        except Exception as e:
+            raise ValueError(f"Unexpected error during file upload: {e}")
+
+    def prepare_file_properties(
+        self, 
+        files: list[str], 
+        file_properties: list[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Prepare file objects for Notion properties."""
+        if not files:
+            return {}
+        
+        file_objects = []
+        for file_path in files:
+            try:
+                file_obj = self.upload_file(file_path)
+                file_objects.append(file_obj)
+                print(f"✅ Uploaded: {os.path.basename(file_path)}")
+            except Exception as e:
+                print(f"❌ Failed to upload {os.path.basename(file_path)}: {e}")
+                continue
+        
+        if not file_objects:
+            return {}
+        
+        # Map files to file properties
+        result = {}
+        for prop_name in file_properties:
+            result[prop_name] = file_objects
+        
+        return result

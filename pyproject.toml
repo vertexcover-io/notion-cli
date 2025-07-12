@@ -11,6 +11,9 @@ dependencies = [
     "pydantic>=2.5.0",
     "toml>=0.10.2",
     "platformdirs>=4.0.0",
+    "litellm>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.25.0",
 ]
 
 [project.scripts]

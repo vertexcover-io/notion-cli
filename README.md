@@ -118,6 +118,22 @@ notion-cli view list
 # Load and display a saved view
 notion-cli view show "active-tasks"
 
+# Update an existing view with new filters or columns
+notion-cli view update "active-tasks" --filter "priority=High"
+notion-cli view update "active-tasks" --columns "Name,Status,Due Date"
+notion-cli view update "active-tasks" --limit 50
+
+# Clear specific settings from a view
+notion-cli view update "active-tasks" --clear-filter
+notion-cli view update "active-tasks" --clear-columns
+notion-cli view update "active-tasks" --clear-limit
+
+# Update multiple settings at once
+notion-cli view update "active-tasks" \
+  --columns "Name,Priority,Status" \
+  --filter "status!=Done" \
+  --limit 25
+
 # Delete a saved view
 notion-cli view delete "old-view"
 ```
@@ -240,6 +256,11 @@ notion-cli view list
 
 # Use a saved view
 notion-cli view show "active-candidates"
+
+# Update an existing view
+notion-cli view update "active-candidates" --filter "status=Interview"
+notion-cli view update "active-candidates" --columns "Name,Status,Experience"
+notion-cli view update "active-candidates" --clear-filter --limit 50
 
 # Delete a view
 notion-cli view delete "old-view"

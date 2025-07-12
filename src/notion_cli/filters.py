@@ -144,6 +144,10 @@ class FilterParser:
 
     def _read_column_name(self) -> str:
         """Read column name until operator or whitespace."""
+        # Check if the column name is quoted
+        if self.pos < len(self.text) and self.text[self.pos] in "\"'":
+            return self._read_quoted_string()
+        
         start = self.pos
 
         while self.pos < len(self.text):
@@ -153,8 +157,8 @@ class FilterParser:
             if self._check_operator_at_pos():
                 break
 
-            # Stop at whitespace, comma, or parentheses
-            if char in " \t,()":
+            # Stop at comma or parentheses, but allow spaces in property names
+            if char in ",()":
                 break
 
             self.pos += 1
@@ -257,7 +261,23 @@ class FilterParser:
         """Check if an operator starts at current position."""
         for op in self.OPERATORS:
             if self.text[self.pos:self.pos + len(op)] == op:
-                return True
+                # Additional check: make sure the operator is not part of a word
+                # by checking that it's followed by whitespace or a value character
+                end_pos = self.pos + len(op)
+                if end_pos < len(self.text):
+                    next_char = self.text[end_pos]
+                    # Operator should be followed by space, quote, or alphanumeric
+                    if next_char in " \t\"'":
+                        return True
+                    # For operators like = ~ < >, they should be followed by value chars or end of string
+                    if op in ["=", "~", "<", ">", "!", ">=", "<=", "!=", "!~"]:
+                        return True
+                    # For "in" and "not in", they must be followed by space
+                    if op in ["in", "not in"] and next_char in " \t":
+                        return True
+                else:
+                    # End of string, this is an operator
+                    return True
         return False
 
     def _skip_whitespace(self):
