@@ -5,8 +5,12 @@ import os
 from typing import Any
 
 import litellm
+import typer
 from dotenv import load_dotenv
 from pydantic import BaseModel
+from rich.console import Console
+
+from .config import ConfigManager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -15,7 +19,7 @@ load_dotenv()
 class LLMConfig(BaseModel):
     """Configuration for LLM service."""
 
-    model: str = "gpt-4.1"
+    model: str = "gpt-4.1-mini"
     temperature: float = 0.1
     max_tokens: int = 2000
 
@@ -23,35 +27,115 @@ class LLMConfig(BaseModel):
 class LLMService:
     """Service for interacting with LLM models via LiteLLM."""
 
-    def __init__(self, config: LLMConfig | None = None) -> None:
+    def __init__(
+        self, config: LLMConfig | None = None, config_manager: ConfigManager | None = None
+    ) -> None:
         """Initialize the LLM service."""
-        self.config = config or LLMConfig()
+        self.config_manager = config_manager or ConfigManager()
+
+        # Get model from config or use provided config
+        if config:
+            self.config = config
+        else:
+            # Load model and API key from config
+            model, api_key = self.config_manager.get_llm_config()
+            if not model:
+                # Prompt for model and API key if not configured
+                model, api_key = self._prompt_for_llm_config()
+                if model and api_key:
+                    self.config_manager.set_llm_config(model, api_key)
+            self.config = LLMConfig(model=model or "gpt-4.1-mini")
 
         # Set up LiteLLM
         litellm.set_verbose = False
 
-        # Check for API keys
-        self._check_api_keys()
+        # Set up API key
+        self._setup_api_key()
 
-    def _check_api_keys(self) -> None:
-        """Check if required API keys are available."""
-        model_lower = self.config.model.lower()
+    def _setup_api_key(self) -> None:
+        """Set up API key for the configured model."""
+        model, api_key = self.config_manager.get_llm_config()
+
+        if not api_key:
+            return
+
+        model_lower = model.lower() if model else ""
 
         if "gpt" in model_lower or "openai" in model_lower:
-            if not os.getenv("OPENAI_API_KEY"):
-                raise ValueError(
-                    "OpenAI API key not found. Set OPENAI_API_KEY environment variable.",
-                )
+            os.environ["OPENAI_API_KEY"] = api_key
         elif "claude" in model_lower or "anthropic" in model_lower:
-            if not os.getenv("ANTHROPIC_API_KEY"):
-                raise ValueError(
-                    "Anthropic API key not found. " "Set ANTHROPIC_API_KEY environment variable.",
-                )
+            os.environ["ANTHROPIC_API_KEY"] = api_key
         elif "gemini" in model_lower or "google" in model_lower:
-            if not os.getenv("GOOGLE_API_KEY"):
-                raise ValueError(
-                    "Google API key not found. Set GOOGLE_API_KEY environment variable.",
-                )
+            os.environ["GOOGLE_API_KEY"] = api_key
+
+    def _prompt_for_llm_config(self) -> tuple[str, str]:
+        """Prompt user for LLM model and API key."""
+        console = Console()
+
+        console.print("\n🤖 LLM Configuration Required", style="bold cyan")
+        console.print(
+            "To use AI features, please configure your preferred LLM model and API key.\n",
+            style="dim",
+        )
+
+        # Show available models
+        console.print("Available models:", style="bold")
+        console.print("1. gpt-4.1-mini (OpenAI) - Fast and cost-effective")
+        console.print("2. gpt-4o (OpenAI) - More capable, higher cost")
+        console.print("3. claude-3-haiku-20240307 (Anthropic) - Fast and efficient")
+        console.print("4. claude-3-sonnet-20240229 (Anthropic) - Balanced performance")
+        console.print("5. gemini-pro (Google) - Google's latest model")
+        console.print("6. Other (enter custom model name)")
+
+        while True:
+            choice = typer.prompt("\nSelect model (1-6)", type=int, default=1)
+
+            if choice == 1:
+                model = "gpt-4.1-mini"
+                provider_name = "OpenAI"
+                key_url = "https://platform.openai.com/api-keys"
+                break
+            elif choice == 2:
+                model = "gpt-4o"
+                provider_name = "OpenAI"
+                key_url = "https://platform.openai.com/api-keys"
+                break
+            elif choice == 3:
+                model = "claude-3-haiku-20240307"
+                provider_name = "Anthropic"
+                key_url = "https://console.anthropic.com/account/keys"
+                break
+            elif choice == 4:
+                model = "claude-3-sonnet-20240229"
+                provider_name = "Anthropic"
+                key_url = "https://console.anthropic.com/account/keys"
+                break
+            elif choice == 5:
+                model = "gemini-pro"
+                provider_name = "Google"
+                key_url = "https://console.cloud.google.com/apis/credentials"
+                break
+            elif choice == 6:
+                model = typer.prompt("Enter model name")
+                provider_name = "Custom"
+                key_url = None
+                break
+            else:
+                console.print("❌ Please select 1-6", style="red")
+                continue
+
+        console.print(f"\n🔑 {provider_name} API key required for model '{model}'", style="yellow")
+        if key_url:
+            console.print(f"Get your API key from: {key_url}", style="blue underline")
+
+        api_key = typer.prompt(f"\nEnter your {provider_name} API key", hide_input=True)
+
+        if not api_key.strip():
+            console.print("❌ API key is required", style="red")
+            raise typer.Exit(1)
+
+        console.print(f"✅ LLM configuration saved: {model}", style="green")
+        return model, api_key.strip()
 
     def generate_structured_data(
         self,
@@ -284,11 +368,15 @@ Respond with valid JSON only:"""
             "- For requests like 'Add X to Y' or 'Update X for Y', filter by Y's identifier\n"
             "- Do NOT filter by properties that will be updated/added\n"
             "- Use exact property names from the available properties list\n"
-            "- For properties with spaces in names, use the exact name\n\n"
+            "- For properties with spaces in names, use the exact name\n"
+            "- Use CONTAINS (~) for partial names/text matching unless exact match is clearly intended\n"
+            "- Use EQUALS (=) only when the full exact value is provided\n\n"
             "Examples:\n"
-            "- 'Add resume to John Doe' → Name=John Doe\n"
+            "- 'Add resume to John Doe' → Name~John Doe (contains, in case full name differs)\n"
             "- 'Update status for urgent tasks' → Tags~urgent\n"
-            "- 'Set priority for Project Alpha' → Name=Project Alpha\n\n"
+            "- 'Set linkedin for aman' → Name~aman (partial name match)\n"
+            "- 'Set priority for Project Alpha' → Name~Project Alpha\n"
+            "- 'Update completed tasks' → Status=Completed (exact status value)\n\n"
             "CRITICAL: Respond with ONLY the filter expression. No explanations, "
             "no parentheses with examples, no additional text."
         )
@@ -480,7 +568,5 @@ JSON for updates:"""
 
 def get_default_llm_service() -> LLMService:
     """Get a default LLM service instance."""
-    # Allow environment variable to override default model
-    model = os.getenv("NOTION_CLI_LLM_MODEL", "gpt-3.5-turbo")
-    config = LLMConfig(model=model)
-    return LLMService(config)
+    config_manager = ConfigManager()
+    return LLMService(config_manager=config_manager)

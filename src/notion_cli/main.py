@@ -3,6 +3,7 @@
 import shutil
 import traceback
 from pathlib import Path
+from typing import Any
 
 import questionary
 import typer
@@ -33,6 +34,48 @@ app.add_typer(page_app, name="page")
 app.add_typer(completion_app, name="completion")
 
 console = Console()
+
+
+def get_database_name_or_default(database_name: str | None) -> str:
+    """Get database name or fall back to default."""
+    if database_name:
+        return database_name
+
+    config_manager = ConfigManager()
+    default_db = config_manager.get_default_database()
+    if default_db:
+        return default_db
+
+    console.print("❌ No database specified and no default database set.", style="red")
+    console.print("Set a default database with: notion db set-default <database_name>", style="dim")
+    raise typer.Exit(1)
+
+
+def resolve_database_name(name: str, interactive: bool = True) -> dict[str, Any] | None:
+    """Resolve a database name (exact or prefix) to a database object."""
+    client = NotionClientWrapper()
+    return client.get_database_by_name_or_prefix(name, interactive=interactive)
+
+
+def get_view_name_or_default(view_name: str | None) -> str:
+    """Get view name or fall back to default."""
+    if view_name:
+        return view_name
+
+    config_manager = ConfigManager()
+    default_view = config_manager.get_default_view()
+    if default_view:
+        return default_view
+
+    console.print("❌ No view specified and no default view set.", style="red")
+    console.print("Set a default view with: notion view set-default <view_name>", style="dim")
+    raise typer.Exit(1)
+
+
+def resolve_view_name(name: str, interactive: bool = True) -> DatabaseView | None:
+    """Resolve a view name (exact or prefix) to a view object."""
+    views_manager = ViewsManager()
+    return views_manager.load_view_by_name_or_prefix(name, interactive=interactive)
 
 
 @auth_app.command("setup")
@@ -120,9 +163,56 @@ def list_databases() -> None:
         raise typer.Exit(1)
 
 
+@db_app.command("set-default")
+def set_default_database(
+    database_name: str = typer.Argument(..., help="Database name to set as default"),
+) -> None:
+    """Set a default database for commands."""
+    try:
+        # Check if database exists (using prefix matching)
+        database = resolve_database_name(database_name)
+        if not database:
+            console.print(f"❌ Database '{database_name}' not found.", style="red")
+            console.print("Use 'notion db list' to see available databases.", style="yellow")
+            raise typer.Exit(1)
+
+        # Extract the actual database title for setting default
+        resolved_database_name = ""
+        if "title" in database and database["title"]:
+            if isinstance(database["title"], list) and database["title"]:
+                resolved_database_name = database["title"][0].get("plain_text", "")
+            elif isinstance(database["title"], str):
+                resolved_database_name = database["title"]
+
+        config_manager = ConfigManager()
+        config_manager.set_default_database(resolved_database_name)
+        console.print(f"✅ Default database set to: {resolved_database_name}", style="green")
+    except Exception as e:
+        console.print(f"❌ Error setting default database: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@db_app.command("get-default")
+def get_default_database() -> None:
+    """Show the current default database."""
+    try:
+        config_manager = ConfigManager()
+        default_db = config_manager.get_default_database()
+        if default_db:
+            console.print(f"Default database: {default_db}", style="green")
+        else:
+            console.print("No default database set.", style="yellow")
+            console.print("Set one with: notion db set-default <database_name>", style="dim")
+    except Exception as e:
+        console.print(f"❌ Error getting default database: {e}", style="red")
+        raise typer.Exit(1)
+
+
 @db_app.command("show")
 def show_database(
-    name: str = typer.Argument(..., help="Database name to show entries for"),
+    name: str | None = typer.Argument(
+        None, help="Database name to show entries for (uses default if not specified)"
+    ),
     limit: int | None = typer.Option(
         None,
         "--limit",
@@ -148,9 +238,12 @@ def show_database(
     ),
 ) -> None:
     """Show entries in a specific database by name."""
+    # Get database name or use default
+    name = get_database_name_or_default(name)
+
     try:
+        database = resolve_database_name(name)
         client = NotionClientWrapper()
-        database = client.get_database_by_name(name)
 
         if not database:
             console.print(f"❌ Database '{name}' not found.", style="red")
@@ -184,11 +277,25 @@ def show_database(
                 filter_conditions = converter.convert(parsed_filters, properties)
                 msg = f"\n📋 Database: {db_title} (filtered)"
                 console.print(msg, style="bold cyan")
+
+                # Display database URL for filtered view too
+                database_url = database.get("url", "")
+                if database_url:
+                    console.print(
+                        f"🔗 Database URL: [link={database_url}]{database_url}[/link]", style="blue"
+                    )
             except Exception as e:
                 console.print(f"❌ Filter error: {e}", style="red")
                 raise typer.Exit(1)
         else:
             console.print(f"\n📋 Database: {db_title}", style="bold cyan")
+
+        # Display database URL
+        database_url = database.get("url", "")
+        if database_url:
+            console.print(
+                f"🔗 Database URL: [link={database_url}]{database_url}[/link]", style="blue"
+            )
 
         # Get all entries with filtering applied (no limit yet)
         all_entries = client.get_database_entries(database_id, None, filter_conditions)
@@ -235,11 +342,26 @@ def show_database(
         # Add rows
         for entry in entries:
             entry_properties = entry.get("properties", {})
+            entry_url = entry.get("url", "")
             row_values = []
 
             for i, prop_name in enumerate(displayed_props):
                 prop_data = entry_properties.get(prop_name, {})
                 value = client.extract_property_value(prop_data)
+
+                # Check if this is a title or name column - make it clickable
+                prop_type = prop_data.get("type", "")
+                is_title_column = prop_type == "title" or prop_name.lower() in [
+                    "name",
+                    "title",
+                    "task",
+                    "item",
+                ]
+
+                if is_title_column and entry_url and value:
+                    # Make the title/name clickable with the entry URL
+                    value = f"[link={entry_url}]{value}[/link]"
+
                 # Truncate based on column width, handling rich markup
                 max_len = column_widths[i] - 3 if i < len(column_widths) else 20
 
@@ -383,20 +505,69 @@ def list_views() -> None:
         raise typer.Exit(1)
 
 
+@view_app.command("set-default")
+def set_default_view(
+    view_name: str = typer.Argument(..., help="View name to set as default"),
+) -> None:
+    """Set a default view for commands."""
+    try:
+        # Check if view exists (using prefix matching)
+        view = resolve_view_name(view_name)
+        if not view:
+            console.print(f"❌ View '{view_name}' not found.", style="red")
+            console.print("Use 'notion view list' to see available views.", style="yellow")
+            raise typer.Exit(1)
+
+        # Use the resolved view name for setting default
+        resolved_view_name = view.name
+
+        config_manager = ConfigManager()
+        config_manager.set_default_view(resolved_view_name)
+        console.print(f"✅ Default view set to: {resolved_view_name}", style="green")
+    except Exception as e:
+        console.print(f"❌ Error setting default view: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@view_app.command("get-default")
+def get_default_view() -> None:
+    """Show the current default view."""
+    try:
+        config_manager = ConfigManager()
+        default_view = config_manager.get_default_view()
+        if default_view:
+            console.print(f"Default view: {default_view}", style="green")
+        else:
+            console.print("No default view set.", style="yellow")
+            console.print("Set one with: notion view set-default <view_name>", style="dim")
+    except Exception as e:
+        console.print(f"❌ Error getting default view: {e}", style="red")
+        raise typer.Exit(1)
+
+
 @view_app.command("show")
 def show_view(
-    view_name: str = typer.Argument(..., help="Name of the view to show"),
+    view_name: str | None = typer.Argument(
+        None, help="Name of the view to show (uses default if not specified)"
+    ),
 ) -> None:
     """Show a database using a saved view."""
+    # Get view name or use default
+    view_name = get_view_name_or_default(view_name)
+
     try:
-        views_manager = ViewsManager()
-        view = views_manager.load_view(view_name)
+        view = resolve_view_name(view_name)
 
         if not view:
             console.print(f"❌ View '{view_name}' not found.", style="red")
             msg = "Use 'notion view list' to see available views."
             console.print(msg, style="yellow")
             raise typer.Exit(1)
+
+        # Show view information
+        console.print(f"\n👁️  View: {view.name}", style="bold magenta")
+        if view.description:
+            console.print(f"📝 Description: {view.description}", style="dim")
 
         # Call the show_database function with the view's parameters
         show_database(
@@ -549,8 +720,13 @@ def update_view(
 
 @db_app.command("create")
 def create_entry(
-    database_name: str = typer.Argument(..., help="Database name to create entry in"),
     prompt: str = typer.Argument(..., help="Natural language description of the entry"),
+    database_name: str | None = typer.Option(
+        None,
+        "--database",
+        "-d",
+        help="Database name to create entry in (uses default if not specified)",
+    ),
     model: str = typer.Option(
         None,
         "--model",
@@ -577,9 +753,12 @@ def create_entry(
     ),
 ) -> None:
     """Create a new database entry using natural language."""
+    # Get database name or use default
+    database_name = get_database_name_or_default(database_name)
+
     try:
+        database = resolve_database_name(database_name)
         client = NotionClientWrapper()
-        database = client.get_database_by_name(database_name)
 
         if not database:
             console.print(f"❌ Database '{database_name}' not found.", style="red")
@@ -681,8 +860,13 @@ def create_entry(
 
 @db_app.command("edit")
 def edit_entries(
-    database_name: str = typer.Argument(..., help="Database name to edit entries in"),
     prompt: str = typer.Argument(..., help="Natural language description of changes"),
+    database_name: str | None = typer.Option(
+        None,
+        "--database",
+        "-d",
+        help="Database name to edit entries in (uses default if not specified)",
+    ),
     model: str = typer.Option(
         None,
         "--model",
@@ -703,9 +887,12 @@ def edit_entries(
     ),
 ) -> None:
     """Edit database entries using natural language."""
+    # Get database name or use default
+    database_name = get_database_name_or_default(database_name)
+
     try:
+        database = resolve_database_name(database_name)
         client = NotionClientWrapper()
-        database = client.get_database_by_name(database_name)
 
         if not database:
             console.print(f"❌ Database '{database_name}' not found.", style="red")
@@ -875,13 +1062,17 @@ def edit_entries(
 
 @db_app.command("link")
 def get_database_link(
-    database_name: str = typer.Argument(..., help="Database name to get link for"),
+    database_name: str | None = typer.Argument(
+        None, help="Database name to get link for (uses default if not specified)"
+    ),
     copy: bool = typer.Option(False, "--copy", "-c", help="Copy the link to clipboard"),
 ) -> None:
     """Get the link for a specific database."""
+    # Get database name or use default
+    database_name = get_database_name_or_default(database_name)
+
     try:
-        client = NotionClientWrapper()
-        database = client.get_database_by_name(database_name)
+        database = resolve_database_name(database_name)
 
         if not database:
             console.print(f"❌ Database '{database_name}' not found.", style="red")
@@ -932,7 +1123,9 @@ def get_database_link(
 
 @db_app.command("entry-link")
 def get_entry_link(
-    database_name: str = typer.Argument(..., help="Database name"),
+    database_name: str | None = typer.Argument(
+        None, help="Database name (uses default if not specified)"
+    ),
     entry_name: str = typer.Argument(..., help="Entry name to get link for"),
     exact: bool = typer.Option(
         False,
@@ -949,7 +1142,19 @@ def get_entry_link(
     ),
 ) -> None:
     """Get the link for a specific database entry."""
+    # Get database name or use default
+    database_name = get_database_name_or_default(database_name)
+
     try:
+        database = resolve_database_name(database_name)
+        if not database:
+            console.print(f"❌ Database '{database_name}' not found.", style="red")
+            console.print(
+                "Use 'notion db list' to see available databases.",
+                style="yellow",
+            )
+            raise typer.Exit(1)
+
         client = NotionClientWrapper()
         entries = client.get_database_entry_by_name(
             database_name,

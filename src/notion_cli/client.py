@@ -61,6 +61,83 @@ class NotionClientWrapper:
 
         return None
 
+    def find_databases_by_prefix(self, prefix: str) -> list[tuple[str, dict[str, Any]]]:
+        """Find databases that start with the given prefix."""
+        databases = self.list_databases()
+        matches = []
+
+        for db in databases:
+            db_title = ""
+            if "title" in db and db["title"]:
+                if isinstance(db["title"], list) and db["title"]:
+                    db_title = db["title"][0].get("plain_text", "")
+                elif isinstance(db["title"], str):
+                    db_title = db["title"]
+
+            if db_title.lower().startswith(prefix.lower()):
+                matches.append((db_title, db))
+
+        return matches
+
+    def get_database_by_name_or_prefix(
+        self, name: str, interactive: bool = True
+    ) -> dict[str, Any] | None:
+        """Get a database by exact name or prefix with user confirmation for multiple matches."""
+        import typer
+        from rich.console import Console
+        from rich.table import Table
+
+        console = Console()
+
+        # First try exact match
+        exact_match = self.get_database_by_name(name)
+        if exact_match:
+            return exact_match
+
+        # Then try prefix matching
+        matches = self.find_databases_by_prefix(name)
+
+        if not matches:
+            return None
+        elif len(matches) == 1:
+            db_title, database = matches[0]
+            if interactive:
+                console.print(
+                    f"🎯 Using database: {db_title} (matched prefix '{name}')", style="cyan"
+                )
+            return database
+        else:
+            # Multiple matches - ask user to choose
+            if not interactive:
+                # In non-interactive mode, return None for ambiguous matches
+                return None
+
+            console.print(f"🔍 Multiple databases match prefix '{name}':", style="yellow")
+
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("#", style="dim", width=3)
+            table.add_column("Database Name", style="cyan")
+
+            for i, (db_title, _) in enumerate(matches, 1):
+                table.add_row(str(i), db_title)
+
+            console.print(table)
+
+            while True:
+                try:
+                    choice = typer.prompt(f"Select database (1-{len(matches)})", type=int)
+                    if 1 <= choice <= len(matches):
+                        selected_title, selected_db = matches[choice - 1]
+                        console.print(f"✅ Selected: {selected_title}", style="green")
+                        return selected_db
+                    else:
+                        console.print(
+                            f"❌ Please enter a number between 1 and {len(matches)}", style="red"
+                        )
+                except (ValueError, KeyboardInterrupt):
+                    console.print("❌ Operation cancelled", style="yellow")
+                    raise typer.Exit(1)
+
     def get_database_by_id(self, database_id: str) -> dict[str, Any]:
         """Get a database by its ID."""
         try:
