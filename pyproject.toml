@@ -36,6 +36,7 @@ dependencies = [
     "pyperclip>=1.8.0",
     "questionary>=2.0.0",
     "md2notionpage>=0.1.5",
+    "fastmcp>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +55,7 @@ Documentation = "https://github.com/vertexcover-io/notion-cli-ai#readme"
 
 [project.scripts]
 notion = "notion_cli.main:app"
+notion-mcp = "notion_cli.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

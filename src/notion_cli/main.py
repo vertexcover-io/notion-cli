@@ -26,12 +26,14 @@ db_app = typer.Typer(help="Database commands")
 view_app = typer.Typer(help="View management commands")
 page_app = typer.Typer(help="Page management commands")
 completion_app = typer.Typer(help="Shell completion commands")
+mcp_app = typer.Typer(help="MCP server commands")
 
 app.add_typer(auth_app, name="auth")
 app.add_typer(db_app, name="db")
 app.add_typer(view_app, name="view")
 app.add_typer(page_app, name="page")
 app.add_typer(completion_app, name="completion")
+app.add_typer(mcp_app, name="mcp")
 
 console = Console()
 
@@ -1936,6 +1938,190 @@ def uninstall_completion(
 
     except Exception as e:
         console.print(f"❌ Failed to uninstall completion: {e}", style="red")
+        raise typer.Exit(1)
+
+
+# MCP Server Commands
+@mcp_app.command("start")
+def start_mcp_server(
+    cache: bool = typer.Option(False, "--cache", help="Enable disk caching"),
+    transport: str = typer.Option("stdio", "--transport", help="Transport protocol (stdio, sse, http)"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host for HTTP/SSE transport"),
+    port: int = typer.Option(8000, "--port", help="Port for HTTP/SSE transport"),
+    path: str = typer.Option("/mcp", "--path", help="Path for HTTP transport"),
+) -> None:
+    """Start the MCP server."""
+    try:
+        from .mcp_server import MCPServer
+        
+        console.print("🚀 Starting Notion CLI AI MCP Server...", style="blue")
+        console.print(f"Transport: {transport}", style="dim")
+        if cache:
+            console.print("Cache: Enabled", style="dim")
+        
+        # Initialize server
+        server = MCPServer(cache_enabled=cache)
+        
+        # Run server with specified transport
+        if transport == "stdio":
+            console.print("Listening on STDIO...", style="dim")
+            server.mcp.run(transport="stdio")
+        elif transport == "sse":
+            console.print(f"Listening on http://{host}:{port}/sse", style="dim")
+            server.mcp.run(transport="sse", host=host, port=port)
+        elif transport == "http":
+            console.print(f"Listening on http://{host}:{port}{path}", style="dim")
+            server.mcp.run(transport="http", host=host, port=port, path=path)
+        else:
+            console.print(f"❌ Unsupported transport: {transport}", style="red")
+            raise typer.Exit(1)
+    
+    except KeyboardInterrupt:
+        console.print("\n🛑 MCP server stopped.", style="yellow")
+    except Exception as e:
+        console.print(f"❌ Error starting MCP server: {e}", style="red")
+        traceback.print_exc()
+        raise typer.Exit(1)
+
+
+@mcp_app.command("accounts")
+def manage_mcp_accounts(
+    list_accounts: bool = typer.Option(False, "--list", "-l", help="List all accounts"),
+    add_account: str = typer.Option(None, "--add", help="Add new account (format: id:email:workspace:token)"),
+    remove_account: str = typer.Option(None, "--remove", help="Remove account by ID"),
+    set_default: str = typer.Option(None, "--set-default", help="Set default account by ID"),
+    test_connection: str = typer.Option(None, "--test", help="Test account connection by ID"),
+) -> None:
+    """Manage MCP server accounts."""
+    try:
+        from .mcp_accounts import AccountManager, NotionAccount
+        
+        account_manager = AccountManager()
+        
+        if list_accounts:
+            accounts = account_manager.list_accounts()
+            if not accounts:
+                console.print("No accounts configured.", style="yellow")
+                return
+            
+            table = Table(title="MCP Server Accounts")
+            table.add_column("Account ID", style="cyan")
+            table.add_column("Email", style="green")  
+            table.add_column("Workspace", style="blue")
+            table.add_column("Default", style="yellow")
+            
+            for account in accounts:
+                table.add_row(
+                    account.account_id,
+                    account.email,
+                    account.workspace_name,
+                    "✅" if account.is_default else ""
+                )
+            
+            console.print(table)
+            
+        elif add_account:
+            try:
+                parts = add_account.split(":", 3)
+                if len(parts) != 4:
+                    console.print("❌ Invalid format. Use: id:email:workspace:token", style="red")
+                    raise typer.Exit(1)
+                
+                account_id, email, workspace, token = parts
+                account = NotionAccount(
+                    account_id=account_id,
+                    email=email,
+                    workspace_name=workspace,
+                    integration_token=token
+                )
+                
+                account_manager.add_account(account)
+                console.print(f"✅ Account '{account_id}' added successfully!", style="green")
+                
+            except Exception as e:
+                console.print(f"❌ Failed to add account: {e}", style="red")
+                raise typer.Exit(1)
+                
+        elif remove_account:
+            if account_manager.remove_account(remove_account):
+                console.print(f"✅ Account '{remove_account}' removed successfully!", style="green")
+            else:
+                console.print(f"❌ Account '{remove_account}' not found.", style="red")
+                raise typer.Exit(1)
+                
+        elif set_default:
+            if account_manager.set_default_account(set_default):
+                console.print(f"✅ Account '{set_default}' set as default!", style="green")
+            else:
+                console.print(f"❌ Account '{set_default}' not found.", style="red")
+                raise typer.Exit(1)
+                
+        elif test_connection:
+            if account_manager.test_account_connection(test_connection):
+                console.print(f"✅ Account '{test_connection}' connection successful!", style="green")
+            else:
+                console.print(f"❌ Account '{test_connection}' connection failed.", style="red")
+                raise typer.Exit(1)
+        else:
+            console.print("Use --help to see available options.", style="yellow")
+            
+    except Exception as e:
+        console.print(f"❌ Error managing accounts: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@mcp_app.command("cache")
+def manage_cache(
+    stats: bool = typer.Option(False, "--stats", help="Show cache statistics"),
+    clear: bool = typer.Option(False, "--clear", help="Clear all cache"),
+    clear_account: str = typer.Option(None, "--clear-account", help="Clear cache for specific account"),
+    cleanup: bool = typer.Option(False, "--cleanup", help="Remove expired entries"),
+) -> None:
+    """Manage MCP server cache."""
+    try:
+        from .mcp_cache import MCPCacheManager
+        
+        cache_manager = MCPCacheManager()
+        
+        if stats:
+            stats_data = cache_manager.get_cache_stats()
+            
+            if not stats_data["enabled"]:
+                console.print("Cache is not enabled.", style="yellow")
+                return
+            
+            console.print("📊 Cache Statistics", style="bold blue")
+            console.print(f"Total entries: {stats_data['total_entries']}")
+            console.print(f"Expired entries: {stats_data['expired_entries']}")
+            console.print(f"Cache size: {stats_data['cache_size_mb']} MB")
+            
+            if stats_data["entries_by_account"]:
+                console.print("\nEntries by account:")
+                for account_id, count in stats_data["entries_by_account"].items():
+                    console.print(f"  {account_id}: {count}")
+            
+            if stats_data["entries_by_operation"]:
+                console.print("\nEntries by operation:")
+                for operation, count in stats_data["entries_by_operation"].items():
+                    console.print(f"  {operation}: {count}")
+                    
+        elif clear:
+            removed_count = cache_manager.clear_all()
+            console.print(f"✅ All cache cleared. Removed {removed_count} entries.", style="green")
+            
+        elif clear_account:
+            cache_manager.invalidate_account(clear_account)
+            console.print(f"✅ Cache cleared for account '{clear_account}'.", style="green")
+            
+        elif cleanup:
+            removed_count = cache_manager.cleanup_expired()
+            console.print(f"✅ Cleanup complete. Removed {removed_count} expired entries.", style="green")
+            
+        else:
+            console.print("Use --help to see available options.", style="yellow")
+            
+    except Exception as e:
+        console.print(f"❌ Error managing cache: {e}", style="red")
         raise typer.Exit(1)
 
 
